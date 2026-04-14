@@ -7,4 +7,7 @@ abstract class RepositorioAsistencias {
   // Registra una asistencia y devuelve el id final del documento creado.
   // El retorno del id permitira luego enlazar alertas, reportes o auditorias.
   Future<String> registrarAsistencia(Asistencia asistencia);
+
+  // Recupera el historial real del trabajador desde la base de datos.
+  Future<List<Asistencia>> obtenerAsistenciasPorUsuario(String usuarioId);
 }

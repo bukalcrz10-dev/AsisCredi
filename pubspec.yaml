@@ -40,6 +40,22 @@ dependencies:
   # Autenticacion base del sistema para trabajadores y administradores.
   firebase_auth: ^5.7.0
 
+  # Almacenamiento de evidencias como la foto facial capturada
+  # al momento de registrar una marcacion valida.
+  firebase_storage: ^12.4.10
+
+  # Geolocalizacion del dispositivo para validar si el trabajador
+  # esta dentro del radio permitido de su sede.
+  geolocator: ^13.0.2
+
+  # Camara del dispositivo para capturar la evidencia facial
+  # antes de permitir la marcacion de asistencia.
+  camera: ^0.11.2+1
+
+  # Detector facial sobre imagen capturada. En esta primera fase
+  # solo confirmamos que existe al menos un rostro en la foto.
+  google_mlkit_face_detection: ^0.13.2
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -63,10 +79,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # Recursos visuales del proyecto como logos institucionales,
+  # imagenes de apoyo y futuros elementos de interfaz.
+  assets:
+    - assets/imagenes/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

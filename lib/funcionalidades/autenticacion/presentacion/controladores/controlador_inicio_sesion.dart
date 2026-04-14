@@ -19,7 +19,8 @@ class ControladorInicioSesion extends ChangeNotifier {
     required String contrasena,
   }) async {
     if (correo.trim().isEmpty || contrasena.trim().isEmpty) {
-      mensajeError = 'Ingresa correo y contrasena.';
+      mensajeError =
+          'Completa tu correo institucional y tu contrasena para ingresar.';
       notifyListeners();
       return;
     }
@@ -35,7 +36,7 @@ class ControladorInicioSesion extends ChangeNotifier {
       );
     } catch (_) {
       mensajeError =
-          'No se pudo iniciar sesion. Verifica el correo, la contrasena y Firebase Auth.';
+          'No pudimos iniciar sesion. Verifica tu correo, tu contrasena y que tu cuenta este habilitada.';
     } finally {
       cargando = false;
       notifyListeners();

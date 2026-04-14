@@ -17,6 +17,7 @@ class Asistencia {
     required this.rostroValidado,
     this.observacion,
     this.correoNotificacion,
+    this.urlEvidenciaFacial,
     this.notificacionEnviada = false,
   });
 
@@ -38,5 +39,8 @@ class Asistencia {
   // Este campo prepara la integracion futura con el envio de correos
   // que mencionaste para informar al administrador cada nueva marcacion.
   final String? correoNotificacion;
+  // URL de la evidencia facial almacenada en Firebase Storage.
+  // Queda asociada a la asistencia para auditoria o panel administrativo.
+  final String? urlEvidenciaFacial;
   final bool notificacionEnviada;
 }

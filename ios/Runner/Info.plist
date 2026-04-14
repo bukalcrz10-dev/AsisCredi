@@ -26,6 +26,14 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Mensaje que iOS muestra al solicitar acceso a la ubicacion.
+	     Explica por que la app necesita GPS para validar la asistencia. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>La ubicacion se usa para validar que la asistencia se registre dentro de la sede autorizada.</string>
+	<!-- Mensaje que iOS muestra al solicitar acceso a la camara.
+	     La captura facial es parte de la validacion previa a la marcacion. -->
+	<key>NSCameraUsageDescription</key>
+	<string>La camara se usa para validar que el trabajador presente su rostro antes de registrar la asistencia.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

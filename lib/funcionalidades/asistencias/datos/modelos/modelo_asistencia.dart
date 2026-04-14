@@ -20,6 +20,7 @@ class ModeloAsistencia {
     required this.rostroValidado,
     this.observacion,
     this.correoNotificacion,
+    this.urlEvidenciaFacial,
     this.notificacionEnviada = false,
   });
 
@@ -35,6 +36,7 @@ class ModeloAsistencia {
   final bool rostroValidado;
   final String? observacion;
   final String? correoNotificacion;
+  final String? urlEvidenciaFacial;
   final bool notificacionEnviada;
 
   factory ModeloAsistencia.desdeEntidad(Asistencia asistencia) {
@@ -51,6 +53,7 @@ class ModeloAsistencia {
       rostroValidado: asistencia.rostroValidado,
       observacion: asistencia.observacion,
       correoNotificacion: asistencia.correoNotificacion,
+      urlEvidenciaFacial: asistencia.urlEvidenciaFacial,
       notificacionEnviada: asistencia.notificacionEnviada,
     );
   }
@@ -71,6 +74,7 @@ class ModeloAsistencia {
       rostroValidado: mapa['rostroValidado'] as bool? ?? false,
       observacion: mapa['observacion'] as String?,
       correoNotificacion: mapa['correoNotificacion'] as String?,
+      urlEvidenciaFacial: mapa['urlEvidenciaFacial'] as String?,
       notificacionEnviada: mapa['notificacionEnviada'] as bool? ?? false,
     );
   }
@@ -89,6 +93,7 @@ class ModeloAsistencia {
       rostroValidado: rostroValidado,
       observacion: observacion,
       correoNotificacion: correoNotificacion,
+      urlEvidenciaFacial: urlEvidenciaFacial,
       notificacionEnviada: notificacionEnviada,
     );
   }
@@ -106,6 +111,7 @@ class ModeloAsistencia {
       'rostroValidado': rostroValidado,
       'observacion': observacion,
       'correoNotificacion': correoNotificacion,
+      'urlEvidenciaFacial': urlEvidenciaFacial,
       'notificacionEnviada': notificacionEnviada,
       // Este enlace se guarda ya preparado para poder mostrarlo
       // en historial, reportes o futuros correos automaticos.

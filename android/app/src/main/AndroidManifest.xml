@@ -1,4 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permisos necesarios para obtener la ubicacion del dispositivo
+         durante la validacion de asistencia. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Permiso necesario para abrir la camara frontal durante
+         la validacion facial previa a la marcacion. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <application
         android:label="flutter_application_1"
         android:name="${applicationName}"

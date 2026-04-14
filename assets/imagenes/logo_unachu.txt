@@ -1,0 +1,9 @@
+Coloca aqui el logo institucional real de la Universidad Nacional Autonoma de Chupaca.
+
+Nombre de archivo recomendado:
+logo_unachu.png
+
+Ruta final esperada por la app:
+assets/imagenes/logo_unachu.png
+
+Este archivo es solo una guia temporal para reservar la carpeta.

@@ -28,4 +28,18 @@ class FuenteDatosAsistenciasFirestore {
         .doc(id)
         .set(datos);
   }
+
+  // Consulta las asistencias del trabajador ordenadas desde la mas reciente.
+  Future<List<MapEntry<String, Map<String, dynamic>>>> obtenerAsistenciasPorUsuario(
+    String usuarioId,
+  ) async {
+    final consulta = await _firestore
+        .collection(ColeccionesFirebase.asistencias)
+        .where('usuarioId', isEqualTo: usuarioId)
+        .get();
+
+    return consulta.docs
+        .map((documento) => MapEntry(documento.id, documento.data()))
+        .toList();
+  }
 }

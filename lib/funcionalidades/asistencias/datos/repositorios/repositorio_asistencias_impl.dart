@@ -29,6 +29,7 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
       rostroValidado: asistencia.rostroValidado,
       observacion: asistencia.observacion,
       correoNotificacion: asistencia.correoNotificacion,
+      urlEvidenciaFacial: asistencia.urlEvidenciaFacial,
       notificacionEnviada: asistencia.notificacionEnviada,
     );
 
@@ -40,5 +41,25 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
     );
 
     return idFinal;
+  }
+
+  @override
+  Future<List<Asistencia>> obtenerAsistenciasPorUsuario(String usuarioId) async {
+    final documentos = await _fuenteDatos.obtenerAsistenciasPorUsuario(usuarioId);
+
+    final asistencias = documentos
+        .map((documento) => ModeloAsistencia.desdeMapa(
+              documento.value,
+              documento.key,
+            ).aEntidad())
+        .toList();
+
+    // Ordenamos localmente para evitar depender de un indice compuesto
+    // en Firestore durante esta etapa del proyecto.
+    asistencias.sort((a, b) => b.fechaHora.compareTo(a.fechaHora));
+
+    // Devolvemos todo el historial del trabajador para que la capa de
+    // presentacion pueda aplicar filtros por dia o por rango sin perder datos.
+    return asistencias;
   }
 }
