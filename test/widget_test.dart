@@ -1,18 +1,25 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 
-import 'package:asistencia_app/app/aplicacion.dart';
+import 'package:asistencia_app/app/tema.dart';
+import 'package:asistencia_app/funcionalidades/autenticacion/presentacion/paginas/pagina_inicio_sesion.dart';
 
 void main() {
-  // Esta prueba valida la base visual minima del proyecto.
-  // Se apoya en app/aplicacion.dart porque ese archivo representa
-  // el punto de entrada de la interfaz sin depender de main.dart.
-  testWidgets('muestra la pantalla inicial del proyecto', (
+  // Esta prueba evita depender de Firebase durante el entorno de test
+  // y valida la composicion basica de la pantalla de acceso.
+  testWidgets('muestra la pantalla institucional de inicio de sesion', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const Aplicacion());
-    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: temaAplicacion(),
+        home: const PaginaInicioSesion(),
+      ),
+    );
+    await tester.pump();
 
     expect(find.text('Iniciar sesion'), findsOneWidget);
-    expect(find.text('Entrar al sistema'), findsOneWidget);
+    expect(find.text('UNACHU'), findsOneWidget);
+    expect(find.text('INGRESAR AL SISTEMA'), findsOneWidget);
   });
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
+import '../funcionalidades/admin/presentacion/widgets/compuerta_admin.dart';
 import '../funcionalidades/autenticacion/presentacion/widgets/compuerta_autenticacion.dart';
 import 'rutas.dart';
 import 'tema.dart';
@@ -12,6 +14,10 @@ class Aplicacion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pantallaInicial = kIsWeb
+        ? const CompuertaAdmin()
+        : const CompuertaAutenticacion();
+
     return MaterialApp(
       title: 'Asistencia App',
       debugShowCheckedModeBanner: false,
@@ -21,9 +27,9 @@ class Aplicacion extends StatelessWidget {
       // Las rutas se concentran en un solo archivo para evitar nombres
       // repetidos o dispersos cuando el proyecto crezca.
       routes: rutasAplicacion,
-      // La compuerta de autenticacion decide si el usuario debe ver el login
-      // o si ya puede entrar a la pantalla principal del trabajador.
-      home: const CompuertaAutenticacion(),
+      // En web mostramos el panel administrativo desacoplado.
+      // En movil mantenemos la compuerta del trabajador.
+      home: pantallaInicial,
     );
   }
 }

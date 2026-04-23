@@ -1,5 +1,5 @@
-name: asistencia_app  # actualizado para que coincida con la carpeta
-description: "A new Flutter project."
+name: asistencia_app
+description: "Aplicacion Flutter de control de asistencia institucional para UNACHU."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -39,6 +39,12 @@ dependencies:
 
   # Autenticacion base del sistema para trabajadores y administradores.
   firebase_auth: ^5.7.0
+
+  # Llamadas a Cloud Functions desde el panel administrativo.
+  cloud_functions: ^5.5.0
+
+  # Cliente HTTP para endpoints administrativos con token Bearer.
+  http: ^1.4.0
 
   # Almacenamiento de evidencias como la foto facial capturada
   # al momento de registrar una marcacion valida.

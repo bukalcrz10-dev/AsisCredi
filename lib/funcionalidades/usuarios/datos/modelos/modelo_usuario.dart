@@ -8,6 +8,9 @@ class ModeloUsuario {
     required this.id,
     required this.nombreCompleto,
     required this.correo,
+    this.telefono = '',
+    this.area = '',
+    this.cargo = '',
     required this.rol,
     required this.sedeAsignadaId,
     this.urlFotoFacial,
@@ -17,6 +20,9 @@ class ModeloUsuario {
   final String id;
   final String nombreCompleto;
   final String correo;
+  final String telefono;
+  final String area;
+  final String cargo;
   final RolUsuario rol;
   final String sedeAsignadaId;
   final String? urlFotoFacial;
@@ -27,6 +33,9 @@ class ModeloUsuario {
       id: usuario.id,
       nombreCompleto: usuario.nombreCompleto,
       correo: usuario.correo,
+      telefono: usuario.telefono,
+      area: usuario.area,
+      cargo: usuario.cargo,
       rol: usuario.rol,
       sedeAsignadaId: usuario.sedeAsignadaId,
       urlFotoFacial: usuario.urlFotoFacial,
@@ -39,6 +48,9 @@ class ModeloUsuario {
       id: id,
       nombreCompleto: mapa['nombreCompleto'] as String? ?? '',
       correo: mapa['correo'] as String? ?? '',
+      telefono: mapa['telefono'] as String? ?? '',
+      area: mapa['area'] as String? ?? '',
+      cargo: mapa['cargo'] as String? ?? '',
       rol: _rolDesdeTexto(mapa['rol'] as String?),
       sedeAsignadaId: mapa['sedeAsignadaId'] as String? ?? '',
       urlFotoFacial: mapa['urlFotoFacial'] as String?,
@@ -51,6 +63,9 @@ class ModeloUsuario {
       id: id,
       nombreCompleto: nombreCompleto,
       correo: correo,
+      telefono: telefono,
+      area: area,
+      cargo: cargo,
       rol: rol,
       sedeAsignadaId: sedeAsignadaId,
       urlFotoFacial: urlFotoFacial,
@@ -62,6 +77,9 @@ class ModeloUsuario {
     return {
       'nombreCompleto': nombreCompleto,
       'correo': correo,
+      'telefono': telefono,
+      'area': area,
+      'cargo': cargo,
       'rol': rol.name,
       'sedeAsignadaId': sedeAsignadaId,
       'urlFotoFacial': urlFotoFacial,

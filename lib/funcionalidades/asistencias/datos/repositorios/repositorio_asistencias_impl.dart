@@ -62,4 +62,19 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
     // presentacion pueda aplicar filtros por dia o por rango sin perder datos.
     return asistencias;
   }
+
+  @override
+  Future<List<Asistencia>> obtenerAsistencias() async {
+    final documentos = await _fuenteDatos.obtenerAsistencias();
+
+    final asistencias = documentos
+        .map((documento) => ModeloAsistencia.desdeMapa(
+              documento.value,
+              documento.key,
+            ).aEntidad())
+        .toList();
+
+    asistencias.sort((a, b) => b.fechaHora.compareTo(a.fechaHora));
+    return asistencias;
+  }
 }

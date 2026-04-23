@@ -1,0 +1,266 @@
+import 'package:flutter/material.dart';
+
+import '../../../../app/diseno_sistema.dart';
+import '../controladores/controlador_asistencia.dart';
+
+class ModuloPerfilTrabajador extends StatelessWidget {
+  const ModuloPerfilTrabajador({
+    super.key,
+    required this.controlador,
+    required this.correoSesion,
+    required this.onCerrarSesion,
+  });
+
+  final ControladorAsistencia controlador;
+  final String? correoSesion;
+  final Future<void> Function()? onCerrarSesion;
+
+  @override
+  Widget build(BuildContext context) {
+    final perfil = controlador.perfilActual;
+    final nombreCompleto = perfil?.nombreCompleto ?? 'Trabajador';
+    final rol = perfil?.rolOCargo ?? 'Personal institucional';
+    final sede = perfil?.nombreSede ?? 'Pendiente';
+    final correoPerfil = perfil?.correoNotificacion;
+    final correo = (correoPerfil != null && correoPerfil.isNotEmpty)
+        ? correoPerfil
+        : (correoSesion ?? 'Sin correo disponible');
+    final inicial = nombreCompleto.trim().isEmpty
+        ? 'T'
+        : nombreCompleto.trim()[0].toUpperCase();
+
+    return ListView(
+      padding: MedidasSistema.paddingPagina,
+      children: [
+        Card(
+          color: ColoresSistema.fondoTarjeta,
+          child: Column(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.topCenter,
+                children: [
+                  SizedBox(
+                    height: 112,
+                    width: double.infinity,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(MedidasSistema.radioTarjeta),
+                        topRight: Radius.circular(MedidasSistema.radioTarjeta),
+                        bottomLeft: Radius.circular(28),
+                        bottomRight: Radius.circular(28),
+                      ),
+                      child: Stack(
+                        alignment: Alignment.topCenter,
+                        children: [
+                          Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Color(0x80BC2027),
+                                  Color(0x38BC2027),
+                                  Color(0x00FFFDFC),
+                                ],
+                                stops: [0.0, 0.42, 1.0],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: -86,
+                            child: Container(
+                              width: 320,
+                              height: 200,
+                              decoration: BoxDecoration(
+                                color: const Color(0x14BC2027),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: -98,
+                            child: Container(
+                              width: 280,
+                              height: 180,
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    ColoresSistema.rojoInstitucionalOscuro,
+                                    ColoresSistema.rojoInstitucionalMedio,
+                                    ColoresSistema.verdeInstitucional,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: -18,
+                    child: CircleAvatar(
+                      radius: 46,
+                      backgroundColor: const Color(0xFFF7E8E7),
+                      child: Text(
+                        inicial,
+                        style:
+                            Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                  fontSize: 28,
+                                  color: ColoresSistema.rojoInstitucional,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 42, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      nombreCompleto,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: ColoresSistema.textoTitulo,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      rol,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontSize: 13,
+                            color: ColoresSistema.textoSecundario,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Informacion institucional',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: ColoresSistema.textoFuerte,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Datos principales de tu cuenta de trabajador.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontSize: 11,
+                              color: ColoresSistema.textoSuave,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _FilaPerfilSimple(
+                      icono: Icons.location_city_outlined,
+                      titulo: 'Sede asignada',
+                      valor: sede,
+                    ),
+                    const SizedBox(height: 12),
+                    _FilaPerfilSimple(
+                      icono: Icons.email_outlined,
+                      titulo: 'Correo institucional',
+                      valor: correo,
+                    ),
+                    const SizedBox(height: 12),
+                    const _FilaPerfilSimple(
+                      icono: Icons.verified_user_outlined,
+                      titulo: 'Estado de cuenta',
+                      valor: 'Activa',
+                      colorIcono: ColoresSistema.verdeInstitucional,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (onCerrarSesion != null) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onCerrarSesion,
+            icon: const Icon(Icons.logout),
+            label: const Text('Cerrar sesion'),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FilaPerfilSimple extends StatelessWidget {
+  const _FilaPerfilSimple({
+    required this.icono,
+    required this.titulo,
+    required this.valor,
+    this.colorIcono,
+  });
+
+  final IconData icono;
+  final String titulo;
+  final String valor;
+  final Color? colorIcono;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: MedidasSistema.paddingBloque,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCFA),
+        borderRadius: BorderRadius.circular(MedidasSistema.radioBloque),
+        border: Border.all(color: ColoresSistema.bordeSuave),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icono,
+            size: 18,
+            color: colorIcono ?? ColoresSistema.textoSuave,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titulo,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                        color: ColoresSistema.textoSuave,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  valor,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: ColoresSistema.textoFuerte,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

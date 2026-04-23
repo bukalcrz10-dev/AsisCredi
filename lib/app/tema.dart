@@ -1,88 +1,82 @@
 import 'package:flutter/material.dart';
+import 'diseno_sistema.dart';
 
 // Tema visual compartido por toda la aplicacion.
 // Vive en app/ porque define la base grafica comun para todos los modulos.
 ThemeData temaAplicacion() {
-  // La app adopta la identidad visual del login de UNACHU:
-  // rojo institucional dominante y verde como acento secundario.
-  const rojoInstitucional = Color(0xFFBC2027);
-  const rojoOscuro = Color(0xFF8E131A);
-  const verdeInstitucional = Color(0xFF184E2F);
-  const fondoClaro = Color(0xFFF6F4F2);
-
   final baseScheme = ColorScheme.fromSeed(
-    seedColor: rojoInstitucional,
+    seedColor: ColoresSistema.rojoInstitucional,
     brightness: Brightness.light,
-    primary: rojoInstitucional,
-    secondary: verdeInstitucional,
+    primary: ColoresSistema.rojoInstitucional,
+    secondary: ColoresSistema.verdeInstitucional,
     surface: Colors.white,
   );
   final colorScheme = baseScheme.copyWith(
-    primary: rojoInstitucional,
+    primary: ColoresSistema.rojoInstitucional,
     onPrimary: Colors.white,
-    secondary: verdeInstitucional,
+    secondary: ColoresSistema.verdeInstitucional,
     onSecondary: Colors.white,
     secondaryContainer: const Color(0xFFF6ECE9),
-    onSecondaryContainer: rojoOscuro,
-    tertiary: const Color(0xFF4EB267),
-    surfaceContainerHighest: const Color(0xFFF4EEEB),
-    outlineVariant: const Color(0xFFE0D5D1),
+    onSecondaryContainer: ColoresSistema.rojoInstitucionalOscuro,
+    tertiary: ColoresSistema.verdeExito,
+    surfaceContainerHighest: ColoresSistema.fondoSuaveAlt,
+    outlineVariant: ColoresSistema.divisor,
   );
 
   return ThemeData(
     useMaterial3: true,
     colorScheme: colorScheme,
-    scaffoldBackgroundColor: fondoClaro,
+    scaffoldBackgroundColor: ColoresSistema.fondoApp,
     textTheme: ThemeData.light().textTheme.copyWith(
           headlineMedium: const TextStyle(
-            fontSize: 25,
+            fontSize: 18,
             fontWeight: FontWeight.w900,
-            letterSpacing: -0.7,
-            color: Color(0xFF221C1A),
+            letterSpacing: -0.3,
+            color: ColoresSistema.textoTitulo,
           ),
           titleLarge: const TextStyle(
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.2,
-            color: Color(0xFF2B2321),
+            color: ColoresSistema.textoFuerte,
           ),
           titleMedium: const TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w700,
             color: Color(0xFF332B28),
           ),
           bodyLarge: const TextStyle(
             fontSize: 14,
             height: 1.4,
-            color: Color(0xFF4B423F),
+            color: ColoresSistema.textoBase,
           ),
           bodyMedium: TextStyle(
             fontSize: 12,
             height: 1.35,
-            color: const Color(0xFF6A605C),
+            color: ColoresSistema.textoSecundario,
           ),
           labelLarge: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF6A605C),
+            color: ColoresSistema.textoSecundario,
           ),
         ),
     // El AppBar queda configurado aqui para que las pantallas nuevas
     // no repitan estilo una por una.
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.white,
-      foregroundColor: const Color(0xFF2B2321),
+      foregroundColor: ColoresSistema.textoFuerte,
       centerTitle: false,
       elevation: 0,
       surfaceTintColor: Colors.white,
-      shadowColor: Colors.black.withOpacity(0.06),
+      shadowColor: Colors.black.withValues(alpha: 0.06),
       titleTextStyle: const TextStyle(
-        color: Color(0xFF2B2321),
-        fontSize: 18,
+        color: ColoresSistema.textoFuerte,
+        fontSize: 16,
         fontWeight: FontWeight.w800,
       ),
       iconTheme: const IconThemeData(
-        color: Color(0xFF5D4B47),
+        color: ColoresSistema.iconoSuave,
       ),
     ),
     // Las tarjetas se usaran bastante en resumenes, estados y reportes,
@@ -91,19 +85,19 @@ ThemeData temaAplicacion() {
       color: Colors.white,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: const BorderSide(color: Color(0xFFE8DEDA)),
+        borderRadius: BorderRadius.circular(MedidasSistema.radioTarjeta),
+        side: const BorderSide(color: ColoresSistema.bordeSuave),
       ),
       margin: EdgeInsets.zero,
       surfaceTintColor: Colors.white,
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: rojoInstitucional,
+        backgroundColor: ColoresSistema.rojoInstitucional,
         foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(54),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
         ),
         textStyle: const TextStyle(
           fontSize: 14,
@@ -114,83 +108,90 @@ ThemeData temaAplicacion() {
     ),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
-        foregroundColor: rojoOscuro,
+        foregroundColor: ColoresSistema.rojoInstitucionalOscuro,
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: rojoOscuro,
+        foregroundColor: ColoresSistema.rojoInstitucionalOscuro,
         minimumSize: const Size.fromHeight(52),
-        side: const BorderSide(color: Color(0xFFD9C6C3)),
+        side: const BorderSide(color: ColoresSistema.bordeChip),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
         ),
         textStyle: const TextStyle(
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: FontWeight.w800,
         ),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: const Color(0xFFFDFCFB),
+      fillColor: ColoresSistema.fondoSuave,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFD8CCC8)),
+        borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
+        borderSide: const BorderSide(color: ColoresSistema.bordeCampo),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFD8CCC8)),
+        borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
+        borderSide: const BorderSide(color: ColoresSistema.bordeCampo),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: rojoInstitucional, width: 1.5),
+        borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
+        borderSide: const BorderSide(
+          color: ColoresSistema.rojoInstitucional,
+          width: 1.5,
+        ),
       ),
       hintStyle: const TextStyle(
-        color: Color(0xFF9A8E89),
+        color: ColoresSistema.textoSuave,
       ),
     ),
     chipTheme: ChipThemeData(
-      backgroundColor: const Color(0xFFFDFCFB),
-      selectedColor: rojoInstitucional.withOpacity(0.1),
-      side: const BorderSide(color: Color(0xFFD8CCC8)),
+      backgroundColor: ColoresSistema.fondoSuave,
+      selectedColor: ColoresSistema.rojoInstitucional.withValues(alpha: 0.1),
+      side: const BorderSide(color: ColoresSistema.bordeCampo),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
       ),
       labelStyle: TextStyle(
-        color: const Color(0xFF4B423F),
+        color: ColoresSistema.textoBase,
         fontWeight: FontWeight.w700,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
     ),
-    dividerColor: const Color(0xFFE0D5D1),
+    dividerColor: ColoresSistema.divisor,
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: Colors.white,
-      indicatorColor: rojoInstitucional.withOpacity(0.14),
+      indicatorColor: ColoresSistema.rojoInstitucional.withValues(alpha: 0.14),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return TextStyle(
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-          color: selected ? rojoInstitucional : const Color(0xFF6A605C),
+          color: selected
+              ? ColoresSistema.rojoInstitucional
+              : ColoresSistema.textoSecundario,
         );
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return IconThemeData(
-          color: selected ? rojoInstitucional : const Color(0xFF7F6D69),
+          color: selected
+              ? ColoresSistema.rojoInstitucional
+              : const Color(0xFF7F6D69),
         );
       }),
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: rojoInstitucional,
-      linearTrackColor: Color(0xFFE8DEDA),
+      color: ColoresSistema.rojoInstitucional,
+      linearTrackColor: ColoresSistema.bordeSuave,
     ),
     dialogTheme: DialogThemeData(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: Color(0xFFE3D6D2)),
+        borderRadius: BorderRadius.circular(MedidasSistema.radioBloque),
+        side: const BorderSide(color: ColoresSistema.bordeIntermedio),
       ),
       backgroundColor: Colors.white,
     ),
@@ -199,7 +200,7 @@ ThemeData temaAplicacion() {
       surfaceTintColor: Colors.transparent,
     ),
     iconTheme: const IconThemeData(
-      color: Color(0xFF6A605C),
+      color: ColoresSistema.iconoBase,
     ),
   );
 }

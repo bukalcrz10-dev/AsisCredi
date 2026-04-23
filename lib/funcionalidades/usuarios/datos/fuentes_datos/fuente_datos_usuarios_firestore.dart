@@ -18,6 +18,17 @@ class FuenteDatosUsuariosFirestore {
     return documento.data();
   }
 
+  Future<List<MapEntry<String, Map<String, dynamic>>>> obtenerUsuarios() async {
+    final consulta = await _firestore
+        .collection(ColeccionesFirebase.usuarios)
+        .orderBy('nombreCompleto')
+        .get();
+
+    return consulta.docs
+        .map((documento) => MapEntry(documento.id, documento.data()))
+        .toList();
+  }
+
   Future<void> guardarUsuario({
     required String id,
     required Map<String, dynamic> datos,

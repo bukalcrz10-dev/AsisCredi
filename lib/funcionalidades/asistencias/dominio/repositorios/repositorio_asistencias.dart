@@ -10,4 +10,7 @@ abstract class RepositorioAsistencias {
 
   // Recupera el historial real del trabajador desde la base de datos.
   Future<List<Asistencia>> obtenerAsistenciasPorUsuario(String usuarioId);
+
+  // Recupera las marcaciones recientes para consulta administrativa.
+  Future<List<Asistencia>> obtenerAsistencias();
 }

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../alertas/dominio/casos_de_uso/obtener_alertas_por_usuario.dart';
@@ -10,7 +9,6 @@ import '../../../alertas/dominio/entidades/tipo_alerta.dart';
 import '../../../reconocimiento_facial/dominio/casos_de_uso/subir_evidencia_facial.dart';
 import '../../../reconocimiento_facial/dominio/casos_de_uso/validar_rostro_capturado.dart';
 import '../../../reconocimiento_facial/dominio/entidades/resultado_validacion_facial.dart';
-import '../../dominio/casos_de_uso/crear_perfil_trabajador_demo.dart';
 import '../../dominio/casos_de_uso/obtener_asistencias_por_usuario.dart';
 import '../../dominio/casos_de_uso/obtener_perfil_trabajador_actual.dart';
 import '../../dominio/casos_de_uso/registrar_asistencia.dart';
@@ -19,6 +17,8 @@ import '../../dominio/entidades/perfil_trabajador_actual.dart';
 import '../../dominio/entidades/tipo_marcacion.dart';
 import '../../../geolocalizacion/dominio/casos_de_uso/validar_ubicacion_actual.dart';
 import '../../../geolocalizacion/dominio/entidades/resultado_validacion_ubicacion.dart';
+import 'controlador_asistencia_auxiliares.dart';
+import 'controlador_asistencia_marcacion_auxiliares.dart';
 
 // Controlador principal de la pantalla del trabajador.
 // Carga el perfil real desde Firestore, mantiene el reloj
@@ -28,7 +28,6 @@ class ControladorAsistencia extends ChangeNotifier {
     required ObtenerAlertasPorUsuario obtenerAlertasPorUsuario,
     required RegistrarAlerta registrarAlerta,
     required RegistrarAsistencia registrarAsistencia,
-    required CrearPerfilTrabajadorDemo crearPerfilTrabajadorDemo,
     required ObtenerAsistenciasPorUsuario obtenerAsistenciasPorUsuario,
     required ObtenerPerfilTrabajadorActual obtenerPerfilTrabajadorActual,
     required SubirEvidenciaFacial subirEvidenciaFacial,
@@ -40,7 +39,6 @@ class ControladorAsistencia extends ChangeNotifier {
   })  : _obtenerAlertasPorUsuario = obtenerAlertasPorUsuario,
         _registrarAlerta = registrarAlerta,
         _registrarAsistencia = registrarAsistencia,
-        _crearPerfilTrabajadorDemo = crearPerfilTrabajadorDemo,
         _obtenerAsistenciasPorUsuario = obtenerAsistenciasPorUsuario,
         _obtenerPerfilTrabajadorActual = obtenerPerfilTrabajadorActual,
         _subirEvidenciaFacial = subirEvidenciaFacial,
@@ -52,7 +50,6 @@ class ControladorAsistencia extends ChangeNotifier {
   final ObtenerAlertasPorUsuario _obtenerAlertasPorUsuario;
   final RegistrarAlerta _registrarAlerta;
   final RegistrarAsistencia _registrarAsistencia;
-  final CrearPerfilTrabajadorDemo _crearPerfilTrabajadorDemo;
   final ObtenerAsistenciasPorUsuario _obtenerAsistenciasPorUsuario;
   final ObtenerPerfilTrabajadorActual _obtenerPerfilTrabajadorActual;
   final SubirEvidenciaFacial _subirEvidenciaFacial;
@@ -73,13 +70,11 @@ class ControladorAsistencia extends ChangeNotifier {
   bool validandoRostro = false;
   bool guardando = false;
   String? mensajeEstado;
-  String? mensajePerfil;
-  String? ultimoIdRegistrado;
   PerfilTrabajadorActual? perfilActual;
   ResultadoValidacionUbicacion? resultadoUbicacion;
   ResultadoValidacionFacial? resultadoFacial;
   DateTimeRange? rangoHistorialSeleccionado;
-  FiltroHistorial filtroHistorial = FiltroHistorial.hoy;
+  FiltroHistorial filtroHistorial = FiltroHistorial.todo;
 
   bool get tienePerfilCargado => perfilActual != null;
 
@@ -99,106 +94,104 @@ class ControladorAsistencia extends ChangeNotifier {
   List<Asistencia> get historialFiltrado {
     switch (filtroHistorial) {
       case FiltroHistorial.hoy:
-        return _filtrarPorDia(DateTime.now());
+        return filtrarMarcacionesPorDia(_historialReciente, DateTime.now());
       case FiltroHistorial.rango:
-        return _filtrarPorRango();
+        return filtrarMarcacionesPorRango(
+          _historialReciente,
+          rangoHistorialSeleccionado,
+        );
       case FiltroHistorial.todo:
         return historialReciente;
     }
   }
 
-  String get descripcionFiltroHistorial {
-    switch (filtroHistorial) {
-      case FiltroHistorial.hoy:
-        return 'Mostrando solo las marcaciones del dia actual.';
-      case FiltroHistorial.rango:
-        if (rangoHistorialSeleccionado == null) {
-          return 'Selecciona un rango para consultar marcaciones especificas.';
-        }
-
-        return 'Mostrando desde ${_formatearFecha(rangoHistorialSeleccionado!.start)} hasta ${_formatearFecha(rangoHistorialSeleccionado!.end)}.';
-      case FiltroHistorial.todo:
-        return 'Mostrando todo el historial disponible del trabajador.';
-    }
-  }
-
-  Asistencia? get ultimaMarcacion =>
-      _historialReciente.isEmpty ? null : _historialReciente.first;
-
   Asistencia? get ultimaEntrada {
-    for (final asistencia in _historialReciente) {
-      if (asistencia.tipoMarcacion == TipoMarcacion.entrada) {
-        return asistencia;
-      }
-    }
-    return null;
+    return obtenerUltimaMarcacionPorTipo(
+      _historialReciente,
+      TipoMarcacion.entrada,
+    );
   }
 
   Asistencia? get ultimaSalida {
-    for (final asistencia in _historialReciente) {
-      if (asistencia.tipoMarcacion == TipoMarcacion.salida) {
-        return asistencia;
-      }
-    }
-    return null;
+    return obtenerUltimaMarcacionPorTipo(
+      _historialReciente,
+      TipoMarcacion.salida,
+    );
   }
 
   // Filtra las marcaciones del mismo dia para aplicar reglas
   // como una sola entrada y una sola salida por jornada.
   List<Asistencia> _marcacionesDelDia(DateTime fecha) {
-    return _historialReciente.where((asistencia) {
-      final fechaAsistencia = asistencia.fechaHora;
-      return fechaAsistencia.year == fecha.year &&
-          fechaAsistencia.month == fecha.month &&
-          fechaAsistencia.day == fecha.day;
-    }).toList();
-  }
-
-  List<Asistencia> _filtrarPorDia(DateTime fecha) {
-    return _marcacionesDelDia(fecha);
-  }
-
-  List<Asistencia> _filtrarPorRango() {
-    final rango = rangoHistorialSeleccionado;
-    if (rango == null) {
-      return historialReciente;
-    }
-
-    final inicio = DateTime(rango.start.year, rango.start.month, rango.start.day);
-    final fin = DateTime(
-      rango.end.year,
-      rango.end.month,
-      rango.end.day,
-      23,
-      59,
-      59,
-      999,
-    );
-
-    return _historialReciente.where((asistencia) {
-      final fecha = asistencia.fechaHora;
-      return !fecha.isBefore(inicio) && !fecha.isAfter(fin);
-    }).toList();
-  }
-
-  void cambiarFiltroHistorial(FiltroHistorial filtro) {
-    filtroHistorial = filtro;
-    notifyListeners();
+    return filtrarMarcacionesPorDia(_historialReciente, fecha);
   }
 
   void actualizarRangoHistorial(DateTimeRange? rango) {
-    rangoHistorialSeleccionado = rango;
-    if (rango != null) {
-      filtroHistorial = FiltroHistorial.rango;
-    }
-    notifyListeners();
+    _actualizarEstadoLocal(() {
+      rangoHistorialSeleccionado = rango;
+      if (rango != null) {
+        filtroHistorial = FiltroHistorial.rango;
+      }
+    });
   }
 
   void _iniciarReloj() {
     _temporizador = Timer.periodic(const Duration(seconds: 1), (_) {
-      fechaHoraActual = DateTime.now();
-      notifyListeners();
+      _actualizarEstadoLocal(() {
+        fechaHoraActual = DateTime.now();
+      });
     });
+  }
+
+  void _actualizarEstadoLocal(VoidCallback accion) {
+    accion();
+    notifyListeners();
+  }
+
+  void _notificarCambio() {
+    notifyListeners();
+  }
+
+  ResultadoValidacionUbicacion _crearResultadoUbicacionConError() {
+    return const ResultadoValidacionUbicacion(
+      servicioHabilitado: false,
+      permisoConcedido: false,
+      latitudActual: null,
+      longitudActual: null,
+      distanciaMetros: null,
+      dentroDeZona: false,
+      mensajeEstado:
+          'No pudimos obtener tu ubicacion actual. Revisa permisos o el GPS del dispositivo.',
+    );
+  }
+
+  ResultadoValidacionUbicacion _crearResultadoUbicacionConfiguracionInvalida(
+    String mensaje,
+  ) {
+    return ResultadoValidacionUbicacion(
+      servicioHabilitado: true,
+      permisoConcedido: true,
+      latitudActual: null,
+      longitudActual: null,
+      distanciaMetros: null,
+      dentroDeZona: false,
+      mensajeEstado: mensaje,
+    );
+  }
+
+  ResultadoValidacionFacial _crearResultadoFacialConError() {
+    return const ResultadoValidacionFacial(
+      permisoCamaraConcedido: false,
+      rostroDetectado: false,
+      cantidadRostros: 0,
+      rutaImagenCapturada: null,
+      mensajeEstado:
+          'No pudimos analizar la foto facial. Intenta tomarla nuevamente.',
+    );
+  }
+
+  void _aplicarResultadoFacial(ResultadoValidacionFacial resultado) {
+    resultadoFacial = resultado;
+    mensajeEstado = resultado.mensajeEstado;
   }
 
   // Registra una alerta en Firestore cuando el trabajador intenta
@@ -229,13 +222,58 @@ class ControladorAsistencia extends ChangeNotifier {
     }
   }
 
+  PerfilTrabajadorActual _crearPerfilDesdeAutenticacion() {
+    return PerfilTrabajadorActual.desdeAutenticacion(
+      usuarioId: usuarioIdAutenticado,
+      nombreCompleto: nombreAutenticado,
+      correo: correoAutenticado,
+    );
+  }
+
+  Future<void> _cargarDatosComplementariosDelPerfil() async {
+    await Future.wait<void>([
+      () async {
+        try {
+          await cargarHistorial();
+        } catch (_) {
+          mensajeEstado =
+              'Tu perfil se cargo correctamente, pero el historial no pudo consultarse en este momento.';
+        }
+      }(),
+      () async {
+        try {
+          await cargarAlertas();
+        } catch (_) {
+          // Las alertas visibles ayudan a la transparencia del sistema,
+          // pero no deben impedir que el trabajador use la pantalla principal.
+        }
+      }(),
+    ]);
+  }
+
+  void _asignarPerfilNoConfigurado() {
+    perfilActual = _crearPerfilDesdeAutenticacion();
+  }
+
+  void _asignarPerfilConErrorDeCarga() {
+    perfilActual = _crearPerfilDesdeAutenticacion();
+  }
+
   // Carga el perfil real del trabajador desde Firestore usando el uid autenticado.
   // Si no existe el documento, deja un mensaje claro para que el administrador
   // complete la ficha del usuario dentro de la coleccion usuarios.
   Future<void> cargarPerfil() async {
-    cargandoPerfil = true;
-    mensajePerfil = null;
-    notifyListeners();
+    _actualizarEstadoLocal(() {
+      cargandoPerfil = true;
+    });
+
+    if (usuarioIdAutenticado.trim().isEmpty) {
+      _actualizarEstadoLocal(() {
+        perfilActual = null;
+        cargandoPerfil = false;
+      });
+      return;
+    }
 
     try {
       final perfil = await _obtenerPerfilTrabajadorActual.ejecutar(
@@ -245,56 +283,20 @@ class ControladorAsistencia extends ChangeNotifier {
       );
 
       if (perfil == null) {
-        // Si no existe perfil todavia, sembramos una sede y un usuario demo
-        // para que puedas probar el flujo sin volver a Firebase Console.
-        await _crearPerfilTrabajadorDemo.ejecutar(
-          usuarioId: usuarioIdAutenticado,
-          nombreCompleto:
-              (nombreAutenticado != null && nombreAutenticado!.trim().isNotEmpty)
-                  ? nombreAutenticado!.trim()
-                  : 'Trabajador Demo',
-          correo: correoAutenticado ?? '',
-        );
-
-        final perfilSembrado = await _obtenerPerfilTrabajadorActual.ejecutar(
-          usuarioId: usuarioIdAutenticado,
-          nombreFallback: nombreAutenticado,
-          correoFallback: correoAutenticado,
-        );
-
-        perfilActual = perfilSembrado;
-      mensajePerfil =
-            'Se preparo un perfil de prueba para que puedas seguir usando la app mientras terminas la configuracion administrativa.';
+        _asignarPerfilNoConfigurado();
       } else {
         perfilActual = perfil;
       }
 
       if (perfilActual != null) {
-        try {
-          await cargarHistorial();
-        } catch (_) {
-          mensajeEstado =
-              'Tu perfil se cargo correctamente, pero el historial no pudo consultarse en este momento.';
-        }
-        try {
-          await cargarAlertas();
-        } catch (_) {
-          // Las alertas visibles ayudan a la transparencia del sistema,
-          // pero no deben impedir que el trabajador use la pantalla principal.
-        }
-        await validarUbicacion();
+        await _cargarDatosComplementariosDelPerfil();
       }
     } catch (_) {
-      perfilActual = PerfilTrabajadorActual.desdeAutenticacion(
-        usuarioId: usuarioIdAutenticado,
-        nombreCompleto: nombreAutenticado,
-        correo: correoAutenticado,
-      );
-      mensajePerfil =
-          'No pudimos cargar tu perfil completo desde Firestore. Revisa las colecciones usuarios y sedes.';
+      _asignarPerfilConErrorDeCarga();
     } finally {
-      cargandoPerfil = false;
-      notifyListeners();
+      _actualizarEstadoLocal(() {
+        cargandoPerfil = false;
+      });
     }
   }
 
@@ -305,8 +307,9 @@ class ControladorAsistencia extends ChangeNotifier {
       return;
     }
 
-    cargandoHistorial = true;
-    notifyListeners();
+    _actualizarEstadoLocal(() {
+      cargandoHistorial = true;
+    });
 
     try {
       final historial =
@@ -316,8 +319,9 @@ class ControladorAsistencia extends ChangeNotifier {
         ..clear()
         ..addAll(historial);
     } finally {
-      cargandoHistorial = false;
-      notifyListeners();
+      _actualizarEstadoLocal(() {
+        cargandoHistorial = false;
+      });
     }
   }
 
@@ -329,8 +333,9 @@ class ControladorAsistencia extends ChangeNotifier {
       return;
     }
 
-    cargandoAlertas = true;
-    notifyListeners();
+    _actualizarEstadoLocal(() {
+      cargandoAlertas = true;
+    });
 
     try {
       final alertas = await _obtenerAlertasPorUsuario.ejecutar(perfil.usuarioId);
@@ -338,56 +343,71 @@ class ControladorAsistencia extends ChangeNotifier {
         ..clear()
         ..addAll(alertas);
     } finally {
-      cargandoAlertas = false;
-      notifyListeners();
+      _actualizarEstadoLocal(() {
+        cargandoAlertas = false;
+      });
     }
   }
 
   // Consulta la ubicacion actual del dispositivo y la compara con la sede real.
   Future<void> validarUbicacion() async {
     final perfil = perfilActual;
-    if (perfil == null || perfil.sedeId.isEmpty) {
+    if (perfil == null || perfil.sedeId.isEmpty || validandoUbicacion) {
       return;
     }
 
-    validandoUbicacion = true;
-    notifyListeners();
+    _actualizarEstadoLocal(() {
+      validandoUbicacion = true;
+    });
 
     try {
+      if (perfil.sede == null) {
+        resultadoUbicacion = _crearResultadoUbicacionConfiguracionInvalida(
+          'La sede asignada no existe en Firestore. El administrador debe revisarla antes de validar ubicacion.',
+        );
+        return;
+      }
+
+      if (perfil.radioPermitidoMetros <= 0) {
+        resultadoUbicacion = _crearResultadoUbicacionConfiguracionInvalida(
+          'La sede asignada no tiene radio permitido configurado. El administrador debe completar ese dato.',
+        );
+        return;
+      }
+
+      if (perfil.latitudSede == 0 && perfil.longitudSede == 0) {
+        resultadoUbicacion = _crearResultadoUbicacionConfiguracionInvalida(
+          'La sede asignada no tiene coordenadas validas configuradas. El administrador debe registrar latitud y longitud.',
+        );
+        return;
+      }
+
       resultadoUbicacion = await _validarUbicacionActual.ejecutar(
         latitudSede: perfil.latitudSede,
         longitudSede: perfil.longitudSede,
         radioPermitidoMetros: perfil.radioPermitidoMetros,
       );
     } catch (_) {
-      resultadoUbicacion = const ResultadoValidacionUbicacion(
-        servicioHabilitado: false,
-        permisoConcedido: false,
-        latitudActual: null,
-        longitudActual: null,
-        distanciaMetros: null,
-        dentroDeZona: false,
-        mensajeEstado:
-            'No pudimos obtener tu ubicacion actual. Revisa permisos o el GPS del dispositivo.',
-      );
+      resultadoUbicacion = _crearResultadoUbicacionConError();
     } finally {
-      validandoUbicacion = false;
-      notifyListeners();
+      _actualizarEstadoLocal(() {
+        validandoUbicacion = false;
+      });
     }
   }
 
   // Recibe la ruta de la foto tomada por la pantalla de camara
   // y delega a ML Kit la deteccion del rostro.
   Future<void> validarRostroConImagen(String rutaImagen) async {
-    validandoRostro = true;
-    notifyListeners();
+    _actualizarEstadoLocal(() {
+      validandoRostro = true;
+    });
 
     try {
-      resultadoFacial = await _validarRostroCapturado.ejecutar(
+      final resultado = await _validarRostroCapturado.ejecutar(
         rutaImagen: rutaImagen,
       );
-
-        mensajeEstado = resultadoFacial?.mensajeEstado;
+      _aplicarResultadoFacial(resultado);
 
       if (resultadoFacial?.rostroDetectado != true) {
         await _registrarAlertaSistema(
@@ -397,153 +417,175 @@ class ControladorAsistencia extends ChangeNotifier {
         );
       }
     } catch (_) {
-      resultadoFacial = const ResultadoValidacionFacial(
-        permisoCamaraConcedido: false,
-        rostroDetectado: false,
-        cantidadRostros: 0,
-        rutaImagenCapturada: null,
-        mensajeEstado:
-            'No pudimos analizar la foto facial. Intenta tomarla nuevamente.',
-      );
-      mensajeEstado = resultadoFacial!.mensajeEstado;
+      _aplicarResultadoFacial(_crearResultadoFacialConError());
       await _registrarAlertaSistema(
         tipo: TipoAlerta.rostroNoValido,
         mensaje: resultadoFacial!.mensajeEstado,
       );
     } finally {
-      validandoRostro = false;
-      notifyListeners();
+      _actualizarEstadoLocal(() {
+        validandoRostro = false;
+      });
     }
   }
 
   // Cada marcacion debe apoyarse en una captura reciente,
   // por eso limpiamos el estado facial cuando la asistencia ya fue aceptada.
   void limpiarValidacionFacial() {
-    resultadoFacial = null;
-    notifyListeners();
+    _actualizarEstadoLocal(() {
+      resultadoFacial = null;
+    });
   }
 
-  Future<void> registrarMarcacion(TipoMarcacion tipoMarcacion) async {
-    final perfil = perfilActual;
-    if (perfil == null) {
-      mensajeEstado =
-          'Tu perfil aun no esta listo. Espera unos segundos y vuelve a intentarlo.';
-      notifyListeners();
-      return;
+  void _actualizarMensajeEstado(String? mensaje) {
+    _actualizarEstadoLocal(() {
+      mensajeEstado = mensaje;
+    });
+  }
+
+  Future<bool> _rechazarMarcacion({
+    required TipoAlerta tipoAlerta,
+    required String mensaje,
+  }) async {
+    mensajeEstado = mensaje;
+    await _registrarAlertaSistema(
+      tipo: tipoAlerta,
+      mensaje: mensaje,
+    );
+    _notificarCambio();
+    return false;
+  }
+
+  bool _validarContextoBasicoMarcacion(PerfilTrabajadorActual? perfil) {
+    final rechazo = obtenerRechazoContextoBasicoMarcacion(
+      perfil: perfil,
+      validandoUbicacion: validandoUbicacion,
+    );
+    if (rechazo != null) {
+      _actualizarMensajeEstado(rechazo.mensaje);
+      return false;
     }
 
+    return true;
+  }
+
+  Future<bool> _validarUbicacionParaMarcacion(TipoMarcacion tipoMarcacion) async {
     if (resultadoUbicacion == null) {
       await validarUbicacion();
     }
 
-    final ubicacion = resultadoUbicacion;
-    if (ubicacion == null) {
-      mensajeEstado =
-          'No pudimos validar tu ubicacion antes de registrar la asistencia.';
-      await _registrarAlertaSistema(
-        tipo: TipoAlerta.marcacionRechazada,
-        mensaje: mensajeEstado!,
+    final rechazo = obtenerRechazoUbicacionMarcacion(
+      ubicacion: resultadoUbicacion,
+      tipoMarcacion: tipoMarcacion,
+    );
+    if (rechazo != null) {
+      return _rechazarMarcacion(
+        tipoAlerta: rechazo.tipoAlerta,
+        mensaje: rechazo.mensaje,
       );
-      notifyListeners();
-      return;
     }
 
-    // La asistencia normal solo se permite si el trabajador
-    // se encuentra dentro del radio autorizado de su sede.
-    if (!ubicacion.dentroDeZona) {
-      mensajeEstado =
-          'No pudimos registrar tu ${tipoMarcacion.name} porque estas fuera del radio permitido de la sede.';
-      await _registrarAlertaSistema(
-        tipo: TipoAlerta.fueraDeZona,
-        mensaje: mensajeEstado!,
+    return true;
+  }
+
+  Future<bool> _validarRostroParaMarcacion(TipoMarcacion tipoMarcacion) async {
+    final rechazo = obtenerRechazoRostroMarcacion(
+      resultadoFacial: resultadoFacial,
+      rostroValidado: rostroValidado,
+      tipoMarcacion: tipoMarcacion,
+    );
+    if (rechazo != null) {
+      return _rechazarMarcacion(
+        tipoAlerta: rechazo.tipoAlerta,
+        mensaje: rechazo.mensaje,
       );
-      notifyListeners();
-      return;
     }
 
-    if (resultadoFacial == null) {
-      mensajeEstado =
-          'Antes de registrar tu ${tipoMarcacion.name}, primero valida tu rostro.';
-      await _registrarAlertaSistema(
-        tipo: TipoAlerta.rostroNoValido,
-        mensaje: mensajeEstado!,
+    return true;
+  }
+
+  Future<bool> _validarReglasDiariasMarcacion(TipoMarcacion tipoMarcacion) async {
+    final rechazo = obtenerRechazoReglaDiariaMarcacion(
+      marcacionesHoy: _marcacionesDelDia(DateTime.now()),
+      tipoMarcacion: tipoMarcacion,
+    );
+    if (rechazo != null) {
+      return _rechazarMarcacion(
+        tipoAlerta: rechazo.tipoAlerta,
+        mensaje: rechazo.mensaje,
       );
-      notifyListeners();
-      return;
     }
 
-    if (!rostroValidado) {
-      mensajeEstado =
-          'No pudimos registrar tu ${tipoMarcacion.name} porque la validacion facial no fue correcta.';
-      await _registrarAlertaSistema(
-        tipo: TipoAlerta.rostroNoValido,
-        mensaje: mensajeEstado!,
-      );
-      notifyListeners();
-      return;
-    }
+    return true;
+  }
 
-    final rutaImagenFacial = resultadoFacial?.rutaImagenCapturada;
-    if (rutaImagenFacial == null || rutaImagenFacial.isEmpty) {
-      mensajeEstado =
-          'La validacion facial quedo incompleta. Toma nuevamente la foto antes de marcar.';
-      await _registrarAlertaSistema(
-        tipo: TipoAlerta.rostroNoValido,
-        mensaje: mensajeEstado!,
-      );
-      notifyListeners();
-      return;
-    }
+  Future<String?> _subirEvidenciaFacialOpcional({
+    required PerfilTrabajadorActual perfil,
+    required String rutaImagenFacial,
+    required DateTime fechaHora,
+    required TipoMarcacion tipoMarcacion,
+  }) async {
+    return _subirEvidenciaFacial
+        .ejecutar(
+          usuarioId: perfil.usuarioId,
+          rutaImagenLocal: rutaImagenFacial,
+          fechaHora: fechaHora,
+          tipoMarcacion: tipoMarcacion,
+        )
+        .timeout(const Duration(seconds: 5));
+  }
 
+  Asistencia _crearAsistenciaPendiente({
+    required PerfilTrabajadorActual perfil,
+    required TipoMarcacion tipoMarcacion,
+    required DateTime fechaHora,
+    required String observacion,
+    required String? urlEvidenciaFacial,
+  }) {
+    return crearAsistenciaTrabajador(
+      perfil: perfil,
+      tipoMarcacion: tipoMarcacion,
+      fechaHora: fechaHora,
+      ubicacion: resultadoUbicacion,
+      dentroDeZona: dentroDeZona,
+      rostroValidado: rostroValidado,
+      observacion: observacion,
+      urlEvidenciaFacial: urlEvidenciaFacial,
+    );
+  }
+
+  void _insertarAsistenciaEnMemoria(Asistencia asistencia, String idGenerado) {
+    _historialReciente.insert(0, clonarAsistenciaConId(asistencia, idGenerado));
+  }
+
+  String _mensajeRegistroExitoso({
+    required TipoMarcacion tipoMarcacion,
+    required DateTime fechaHora,
+    required bool evidenciaPendiente,
+  }) {
+    return construirMensajeRegistroExitoso(
+      tipoMarcacion: tipoMarcacion,
+      fechaHora: fechaHora,
+      evidenciaPendiente: evidenciaPendiente,
+    );
+  }
+
+  Future<void> registrarMarcacion(TipoMarcacion tipoMarcacion) async {
+    final perfil = perfilActual;
+    if (!_validarContextoBasicoMarcacion(perfil)) return;
+    final perfilSeguro = perfil!;
+
+    if (!await _validarUbicacionParaMarcacion(tipoMarcacion)) return;
+    if (!await _validarRostroParaMarcacion(tipoMarcacion)) return;
+    if (!await _validarReglasDiariasMarcacion(tipoMarcacion)) return;
+
+    final rutaImagenFacial = resultadoFacial!.rutaImagenCapturada!;
     final ahora = DateTime.now();
-    final marcacionesHoy = _marcacionesDelDia(ahora);
-    final yaMarcoEntradaHoy = marcacionesHoy.any(
-      (asistencia) => asistencia.tipoMarcacion == TipoMarcacion.entrada,
-    );
-    final yaMarcoSalidaHoy = marcacionesHoy.any(
-      (asistencia) => asistencia.tipoMarcacion == TipoMarcacion.salida,
-    );
 
-    // Reglas de negocio diarias:
-    // 1. Solo una entrada por dia.
-    // 2. Solo una salida por dia.
-    // 3. No se permite salida sin una entrada previa ese mismo dia.
-    if (tipoMarcacion == TipoMarcacion.entrada && yaMarcoEntradaHoy) {
-      mensajeEstado =
-          'Ya registraste tu entrada de hoy. No necesitas volver a marcar otra entrada.';
-      await _registrarAlertaSistema(
-        tipo: TipoAlerta.marcacionRechazada,
-        mensaje: mensajeEstado!,
-      );
-      notifyListeners();
-      return;
-    }
-
-    if (tipoMarcacion == TipoMarcacion.salida && !yaMarcoEntradaHoy) {
-      mensajeEstado =
-          'Primero necesitas registrar una entrada hoy antes de marcar tu salida.';
-      await _registrarAlertaSistema(
-        tipo: TipoAlerta.marcacionRechazada,
-        mensaje: mensajeEstado!,
-      );
-      notifyListeners();
-      return;
-    }
-
-    if (tipoMarcacion == TipoMarcacion.salida && yaMarcoSalidaHoy) {
-      mensajeEstado =
-          'Ya registraste tu salida de hoy. No necesitas volver a marcar otra salida.';
-      await _registrarAlertaSistema(
-        tipo: TipoAlerta.marcacionRechazada,
-        mensaje: mensajeEstado!,
-      );
-      notifyListeners();
-      return;
-    }
-
-    guardando = true;
-    mensajeEstado = null;
-    notifyListeners();
+    _actualizarEstadoLocal(() {
+      guardando = true;
+      mensajeEstado = null;
+    });
 
     try {
       String? urlEvidenciaFacial;
@@ -555,9 +597,9 @@ class ControladorAsistencia extends ChangeNotifier {
       // Si Storage aun no esta disponible, no bloqueamos la asistencia
       // y dejamos una observacion explicita para retomarlo luego.
       try {
-        urlEvidenciaFacial = await _subirEvidenciaFacial.ejecutar(
-          usuarioId: perfil.usuarioId,
-          rutaImagenLocal: rutaImagenFacial,
+        urlEvidenciaFacial = await _subirEvidenciaFacialOpcional(
+          perfil: perfilSeguro,
+          rutaImagenFacial: rutaImagenFacial,
           fechaHora: ahora,
           tipoMarcacion: tipoMarcacion,
         );
@@ -566,55 +608,39 @@ class ControladorAsistencia extends ChangeNotifier {
             'Marcacion generada desde la pantalla del trabajador. La evidencia facial no pudo subirse a Firebase Storage.';
       }
 
-      final asistencia = Asistencia(
-        id: '',
-        usuarioId: perfil.usuarioId,
-        nombreUsuario: perfil.nombreCompleto,
-        sedeId: perfil.sedeId,
+      final asistencia = _crearAsistenciaPendiente(
+        perfil: perfilSeguro,
         tipoMarcacion: tipoMarcacion,
         fechaHora: ahora,
-        latitud: ubicacion.latitudActual ?? perfil.latitudSede,
-        longitud: ubicacion.longitudActual ?? perfil.longitudSede,
-        dentroDeZona: dentroDeZona,
-        rostroValidado: rostroValidado,
         observacion: observacion,
-        correoNotificacion: perfil.correoNotificacion,
         urlEvidenciaFacial: urlEvidenciaFacial,
       );
 
       final idGenerado = await _registrarAsistencia.ejecutar(asistencia);
 
-      ultimoIdRegistrado = idGenerado;
-      mensajeEstado = urlEvidenciaFacial == null
-          ? 'Tu ${tipoMarcacion.name} se registro correctamente a las ${_formatearHora(asistencia.fechaHora)}. La evidencia facial quedo pendiente porque Storage aun no esta disponible.'
-          : 'Tu ${tipoMarcacion.name} se registro correctamente a las ${_formatearHora(asistencia.fechaHora)}.';
+      _insertarAsistenciaEnMemoria(asistencia, idGenerado);
+      mensajeEstado = _mensajeRegistroExitoso(
+        tipoMarcacion: tipoMarcacion,
+        fechaHora: asistencia.fechaHora,
+        evidenciaPendiente: urlEvidenciaFacial == null,
+      );
+      limpiarValidacionFacial();
+      _notificarCambio();
 
       // Refrescamos el historial real despues de guardar para que la pantalla
       // refleje exactamente los datos persistidos en Firestore.
-      await cargarHistorial();
-      await cargarAlertas();
-      limpiarValidacionFacial();
+      await Future.wait<void>([
+        cargarHistorial(),
+        cargarAlertas(),
+      ]);
     } catch (_) {
       mensajeEstado =
           'No pudimos registrar la asistencia en Firebase. Intenta nuevamente en unos segundos.';
     } finally {
-      guardando = false;
-      notifyListeners();
+      _actualizarEstadoLocal(() {
+        guardando = false;
+      });
     }
-  }
-
-  String _formatearHora(DateTime fechaHora) {
-    final hora = fechaHora.hour.toString().padLeft(2, '0');
-    final minuto = fechaHora.minute.toString().padLeft(2, '0');
-    final segundo = fechaHora.second.toString().padLeft(2, '0');
-    return '$hora:$minuto:$segundo';
-  }
-
-  String _formatearFecha(DateTime fechaHora) {
-    final dia = fechaHora.day.toString().padLeft(2, '0');
-    final mes = fechaHora.month.toString().padLeft(2, '0');
-    final anio = fechaHora.year.toString();
-    return '$dia/$mes/$anio';
   }
 
   @override
@@ -622,12 +648,4 @@ class ControladorAsistencia extends ChangeNotifier {
     _temporizador?.cancel();
     super.dispose();
   }
-}
-
-// Modos de consulta del historial personal del trabajador.
-// Permiten alternar entre el dia actual, un rango concreto o todo el historial.
-enum FiltroHistorial {
-  hoy,
-  rango,
-  todo,
 }

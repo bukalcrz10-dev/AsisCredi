@@ -20,6 +20,15 @@ class RepositorioUsuariosImpl implements RepositorioUsuarios {
   }
 
   @override
+  Future<List<Usuario>> obtenerUsuarios() async {
+    final documentos = await _fuenteDatos.obtenerUsuarios();
+    return documentos
+        .map((entrada) => ModeloUsuario.desdeMapa(entrada.value, entrada.key))
+        .map((modelo) => modelo.aEntidad())
+        .toList();
+  }
+
+  @override
   Future<void> guardarUsuario(Usuario usuario) {
     final modelo = ModeloUsuario.desdeEntidad(usuario);
     return _fuenteDatos.guardarUsuario(

@@ -5,6 +5,7 @@ import '../entidades/usuario.dart';
 // directamente de Firestore ni de detalles de infraestructura.
 abstract class RepositorioUsuarios {
   Future<Usuario?> obtenerUsuarioPorId(String id);
+  Future<List<Usuario>> obtenerUsuarios();
 
   Future<void> guardarUsuario(Usuario usuario);
 }

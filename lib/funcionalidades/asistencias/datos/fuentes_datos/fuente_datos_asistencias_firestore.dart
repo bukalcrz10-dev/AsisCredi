@@ -42,4 +42,16 @@ class FuenteDatosAsistenciasFirestore {
         .map((documento) => MapEntry(documento.id, documento.data()))
         .toList();
   }
+
+  Future<List<MapEntry<String, Map<String, dynamic>>>> obtenerAsistencias() async {
+    final consulta = await _firestore
+        .collection(ColeccionesFirebase.asistencias)
+        .orderBy('fechaHora', descending: true)
+        .limit(300)
+        .get();
+
+    return consulta.docs
+        .map((documento) => MapEntry(documento.id, documento.data()))
+        .toList();
+  }
 }
