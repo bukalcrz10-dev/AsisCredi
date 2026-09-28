@@ -29,6 +29,13 @@ class FuenteDatosAsistenciasFirestore {
         .set(datos);
   }
 
+  Future<void> eliminarAsistencia(String id) {
+    return _firestore
+        .collection(ColeccionesFirebase.asistencias)
+        .doc(id)
+        .delete();
+  }
+
   // Consulta las asistencias del trabajador ordenadas desde la mas reciente.
   Future<List<MapEntry<String, Map<String, dynamic>>>> obtenerAsistenciasPorUsuario(
     String usuarioId,

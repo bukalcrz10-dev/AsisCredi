@@ -39,6 +39,11 @@ class ObtenerPerfilTrabajadorActual {
       usuarioId: usuario.id,
       nombreCompleto: usuario.nombreCompleto,
       rolOCargo: _rolATexto(usuario),
+      area: usuario.area.trim(),
+      cargo: usuario.cargo.trim().isNotEmpty
+          ? usuario.cargo.trim()
+          : _rolATexto(usuario),
+      telefono: usuario.telefono.trim(),
       sedeId: sedeIdNormalizado,
       nombreSede: sede?.nombre ?? 'Sede no encontrada',
       correoNotificacion:

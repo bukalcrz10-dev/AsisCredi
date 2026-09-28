@@ -145,4 +145,55 @@ class ServicioTrabajadoresAuthFunctions {
           (datos['mensaje'] as String?) ?? 'No se pudo actualizar el trabajador.',
     );
   }
+
+  Future<void> restablecerContrasenaTrabajador({
+    required String uid,
+    required String password,
+  }) async {
+    final usuarioActual = _auth.currentUser;
+    if (usuarioActual == null) {
+      throw FirebaseAuthException(
+        code: 'unauthenticated',
+        message: 'No hay una sesion administrativa activa.',
+      );
+    }
+
+    final idToken = await usuarioActual.getIdToken(true);
+    if (idToken == null || idToken.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'invalid-user-token',
+        message: 'No se pudo obtener el token de la sesion administrativa.',
+      );
+    }
+
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/restablecerContrasenaTrabajadorHttp'),
+      headers: <String, String>{
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $idToken',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'uid': uid,
+        'password': password,
+      }),
+    );
+
+    final dynamic cuerpoDecodificado = response.body.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(response.body);
+
+    final Map<String, dynamic> datos = cuerpoDecodificado is Map<String, dynamic>
+        ? cuerpoDecodificado
+        : <String, dynamic>{};
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return;
+    }
+
+    throw FirebaseAuthException(
+      code: (datos['codigo'] as String?) ?? 'internal',
+      message: (datos['mensaje'] as String?) ??
+          'No se pudo restablecer la contrasena del trabajador.',
+    );
+  }
 }

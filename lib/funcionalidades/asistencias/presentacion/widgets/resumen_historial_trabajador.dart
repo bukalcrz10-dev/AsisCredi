@@ -1,5 +1,5 @@
 import '../../dominio/entidades/asistencia.dart';
-import '../../dominio/entidades/tipo_marcacion.dart';
+import '../controladores/controlador_asistencia_auxiliares.dart';
 
 class ResumenDiaHistorial {
   const ResumenDiaHistorial({
@@ -10,88 +10,49 @@ class ResumenDiaHistorial {
   final DateTime fecha;
   final List<Asistencia> marcaciones;
 
+  Asistencia? get entradaManana => _resumenJornada.manana.entradaMarcada;
+
+  Asistencia? get salidaManana => _resumenJornada.manana.salidaMarcada;
+
+  Asistencia? get entradaTarde => _resumenJornada.tarde.entradaMarcada;
+
+  Asistencia? get salidaTarde => _resumenJornada.tarde.salidaMarcada;
+
   Asistencia? get entrada {
-    for (final marcacion in marcaciones) {
-      if (marcacion.tipoMarcacion == TipoMarcacion.entrada) {
-        return marcacion;
-      }
-    }
-    return null;
+    return entradaManana;
   }
 
   Asistencia? get salida {
-    for (final marcacion in marcaciones.reversed) {
-      if (marcacion.tipoMarcacion == TipoMarcacion.salida) {
-        return marcacion;
-      }
-    }
-    return null;
+    return salidaTarde ?? salidaManana;
   }
 
   Duration? get tardanza {
-    final primeraEntrada = entrada;
-    if (primeraEntrada == null) {
-      return null;
-    }
-
-    final horaProgramada = DateTime(
-      fecha.year,
-      fecha.month,
-      fecha.day,
-      8,
-      0,
-    );
-
-    if (!primeraEntrada.fechaHora.isAfter(horaProgramada)) {
-      return Duration.zero;
-    }
-
-    return primeraEntrada.fechaHora.difference(horaProgramada);
+    return _resumenJornada.tardanzaTotal;
   }
 
   Duration? get tiempoLaborado {
-    Duration total = Duration.zero;
-    Asistencia? entradaAbierta;
-
-    for (final marcacion in marcaciones) {
-      if (marcacion.tipoMarcacion == TipoMarcacion.entrada) {
-        entradaAbierta = marcacion;
-      } else if (marcacion.tipoMarcacion == TipoMarcacion.salida &&
-          entradaAbierta != null &&
-          !marcacion.fechaHora.isBefore(entradaAbierta.fechaHora)) {
-        total += marcacion.fechaHora.difference(entradaAbierta.fechaHora);
-        entradaAbierta = null;
-      }
-    }
-
-    if (total == Duration.zero) {
-      return null;
-    }
-
-    return total;
+    return _resumenJornada.tiempoLaborado;
   }
 
   Duration? get descanso {
-    Duration total = Duration.zero;
-    Asistencia? ultimaSalida;
-
-    for (final marcacion in marcaciones) {
-      if (marcacion.tipoMarcacion == TipoMarcacion.salida) {
-        ultimaSalida = marcacion;
-      } else if (marcacion.tipoMarcacion == TipoMarcacion.entrada &&
-          ultimaSalida != null &&
-          marcacion.fechaHora.isAfter(ultimaSalida.fechaHora)) {
-        total += marcacion.fechaHora.difference(ultimaSalida.fechaHora);
-        ultimaSalida = null;
-      }
-    }
-
-    if (total == Duration.zero) {
-      return null;
-    }
-
-    return total;
+    return _resumenJornada.descanso;
   }
+
+  bool get completo => _resumenJornada.totalBloquesCompletos == 2;
+
+  bool get observado {
+    final tardanzaTotal = tardanza;
+    return tardanzaTotal != null && tardanzaTotal > Duration.zero;
+  }
+
+  String get estadoTexto {
+    if (completo && !observado) return 'Completo';
+    if (observado) return 'Observado';
+    return 'Pendiente';
+  }
+
+  ResumenJornadaTrabajador get _resumenJornada =>
+      construirResumenJornadaTrabajador(marcaciones, fecha);
 }
 
 List<ResumenDiaHistorial> agruparHistorialPorDia(List<Asistencia> asistencias) {

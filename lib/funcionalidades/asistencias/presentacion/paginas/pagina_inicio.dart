@@ -81,25 +81,81 @@ class _PaginaInicioState extends State<PaginaInicio>
     await _controlador.validarRostroConImagen(rutaImagen);
   }
 
-  Future<void> _seleccionarRangoHistorial() async {
+  Future<void> _seleccionarFechaInicioHistorial() async {
+    final fechaActual = _controlador.fechaInicioHistorialSeleccionada;
+
+    if (fechaActual != null) {
+      _controlador.actualizarInicioHistorial(null);
+      return;
+    }
+
     final ahora = DateTime.now();
-    final rango = await showDateRangePicker(
+    final fechaSeleccionada = await showDatePicker(
       context: context,
+      initialDate: ahora,
       firstDate: DateTime(ahora.year - 2),
       lastDate: DateTime(ahora.year + 1),
-      initialDateRange:
-          _controlador.rangoHistorialSeleccionado ??
-          DateTimeRange(
-            start: DateTime(ahora.year, ahora.month, ahora.day),
-            end: DateTime(ahora.year, ahora.month, ahora.day),
-          ),
-      helpText: 'Seleccionar rango del historial',
-      saveText: 'Aplicar',
-      cancelText: 'Cancelar',
+      helpText: 'Seleccionar fecha de inicio',
     );
 
-    if (rango != null) {
-      _controlador.actualizarRangoHistorial(rango);
+    if (fechaSeleccionada == null) {
+      return;
+    }
+
+    _controlador.actualizarInicioHistorial(fechaSeleccionada);
+  }
+
+  Future<void> _seleccionarFechaFinHistorial() async {
+    final fechaActual = _controlador.fechaFinHistorialSeleccionada;
+
+    if (fechaActual != null) {
+      _controlador.actualizarFinHistorial(null);
+      return;
+    }
+
+    final ahora = DateTime.now();
+    final fechaSeleccionada = await showDatePicker(
+      context: context,
+      initialDate: ahora,
+      firstDate: DateTime(ahora.year - 2),
+      lastDate: DateTime(ahora.year + 1),
+      helpText: 'Seleccionar fecha final',
+    );
+
+    if (fechaSeleccionada == null) {
+      return;
+    }
+
+    _controlador.actualizarFinHistorial(fechaSeleccionada);
+  }
+
+  Future<void> _buscarHistorialPorRango() async {
+    final inicio = _controlador.fechaInicioHistorialSeleccionada;
+    final fin = _controlador.fechaFinHistorialSeleccionada;
+
+    if (inicio == null && fin == null) {
+      _controlador.actualizarRangoHistorial(null);
+      return;
+    }
+
+    if (inicio != null && fin != null) {
+      _controlador.actualizarRangoHistorial(
+        DateTimeRange(start: inicio, end: fin),
+      );
+      return;
+    }
+
+    if (inicio != null) {
+      _controlador.actualizarRangoHistorial(
+        DateTimeRange(start: inicio, end: inicio),
+      );
+      return;
+    }
+
+    if (fin != null) {
+      _controlador.actualizarRangoHistorial(
+        DateTimeRange(start: fin, end: fin),
+      );
     }
   }
 
@@ -131,7 +187,9 @@ class _PaginaInicioState extends State<PaginaInicio>
       case 1:
         return ModuloHistorialTrabajador(
           controlador: _controlador,
-          onSeleccionarRango: _seleccionarRangoHistorial,
+          onSeleccionarFechaInicio: _seleccionarFechaInicioHistorial,
+          onSeleccionarFechaFin: _seleccionarFechaFinHistorial,
+          onBuscarRango: _buscarHistorialPorRango,
         );
       default:
         return ModuloPerfilTrabajador(

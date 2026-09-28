@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
-        android:label="flutter_application_1"
+        android:label="UNACHU"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

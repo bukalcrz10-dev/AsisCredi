@@ -119,24 +119,6 @@ class HojaProcesoMarcacion extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (resultadoUbicacion != null &&
-                          (!resultadoUbicacion.servicioHabilitado ||
-                              !resultadoUbicacion.permisoConcedido ||
-                              !resultadoUbicacion.dentroDeZona)) ...[
-                        const SizedBox(height: 8),
-                        TarjetaMensajePanel(
-                          mensaje: resultadoUbicacion.mensajeEstado,
-                          color: Colors.red,
-                          icono: Icons.location_off_outlined,
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      EtiquetaPanelTrabajador(
-                        titulo: 'Consideracion',
-                        contenido: controlador.dentroDeZona
-                            ? 'La ubicacion esta dentro del radio permitido.'
-                            : 'La ubicacion aun no cumple la validacion requerida.',
-                      ),
                       const SizedBox(height: 12),
                       FilledButton.tonalIcon(
                         onPressed:
@@ -190,10 +172,11 @@ class HojaProcesoMarcacion extends StatelessWidget {
                         child: FilledButton.icon(
                           onPressed: puedeConfirmar
                               ? () async {
-                                  await controlador.registrarMarcacion(
+                                  final registroExitoso =
+                                      await controlador.registrarMarcacion(
                                     tipoMarcacion,
                                   );
-                                  if (context.mounted) {
+                                  if (context.mounted && registroExitoso) {
                                     Navigator.of(context).pop();
                                   }
                                 }

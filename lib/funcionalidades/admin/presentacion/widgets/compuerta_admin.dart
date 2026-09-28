@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import '../../../autenticacion/datos/fuentes_datos/fuente_datos_autenticacion_firebase.dart';
 import '../../../autenticacion/datos/repositorios/repositorio_autenticacion_impl.dart';
@@ -91,6 +92,20 @@ class _CompuertaAdminState extends State<CompuertaAdmin> {
           future: _repositorioUsuarios.obtenerUsuarioPorId(usuarioAuth.uid),
           builder: (context, perfilSnapshot) {
             if (perfilSnapshot.connectionState == ConnectionState.waiting) {
+              return _buildCargando();
+            }
+
+            if (perfilSnapshot.hasError) {
+              final error = perfilSnapshot.error;
+              final mensaje = error is FirebaseException &&
+                      error.code == 'permission-denied'
+                  ? 'No se pudo leer tu perfil: Firestore denego el acceso. Revisa las reglas de seguridad del proyecto.'
+                  : 'No se pudo cargar tu perfil administrativo. Comprueba tu conexion e intenta ingresar nuevamente.';
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _forzarSalidaConMensaje(mensaje);
+                }
+              });
               return _buildCargando();
             }
 

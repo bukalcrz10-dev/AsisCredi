@@ -507,3 +507,87 @@ exports.restablecerContrasenaTrabajador = onCall(
       }
     },
 );
+
+exports.restablecerContrasenaTrabajadorHttp = onRequest(
+    {
+      region: "us-central1",
+      invoker: "public",
+    },
+    async (request, response) => {
+      responderCors(request, response);
+
+      if (request.method === "OPTIONS") {
+        response.status(204).send("");
+        return;
+      }
+
+      if (request.method !== "POST") {
+        response.status(405).json({
+          ok: false,
+          codigo: "method-not-allowed",
+          mensaje: "Solo se permite el metodo POST.",
+        });
+        return;
+      }
+
+      try {
+        const auth = await obtenerAuthDesdeBearer(request);
+        const data = request.body || {};
+
+        await validarAdministrador(
+            auth,
+            "Solo un administrador institucional puede restablecer contrasenas.",
+        );
+
+        const uid = `${data.uid || ""}`.trim();
+        const password = `${data.password || ""}`;
+
+        if (!uid || !password) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Debes enviar el uid y la nueva contrasena.",
+          );
+        }
+
+        if (password.length < 6) {
+          throw new HttpsError(
+              "invalid-argument",
+              "La contrasena debe tener al menos 6 caracteres.",
+          );
+        }
+
+        await admin.auth().updateUser(uid, {
+          password,
+        });
+
+        response.status(200).json({
+          ok: true,
+          mensaje: "Contrasena restablecida correctamente.",
+        });
+      } catch (error) {
+        console.error("Error HTTP al restablecer contrasena", {
+          code: error && error.code ? error.code : null,
+          message: error && error.message ? error.message : `${error}`,
+        });
+
+        const codigo = error && error.code ? error.code : "internal";
+        const mensaje = error && error.message ?
+          error.message :
+          "No se pudo restablecer la contrasena del trabajador.";
+
+        const mapaEstados = {
+          "unauthenticated": 401,
+          "permission-denied": 403,
+          "invalid-argument": 400,
+          "failed-precondition": 412,
+          "internal": 500,
+        };
+
+        response.status(mapaEstados[codigo] || 500).json({
+          ok: false,
+          codigo,
+          mensaje,
+        });
+      }
+    },
+);

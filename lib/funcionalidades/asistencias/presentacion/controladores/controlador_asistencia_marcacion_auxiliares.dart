@@ -7,10 +7,7 @@ import '../../dominio/entidades/tipo_marcacion.dart';
 import 'controlador_asistencia_auxiliares.dart';
 
 class RechazoMarcacion {
-  const RechazoMarcacion({
-    required this.tipoAlerta,
-    required this.mensaje,
-  });
+  const RechazoMarcacion({required this.tipoAlerta, required this.mensaje});
 
   final TipoAlerta tipoAlerta;
   final String mensaje;
@@ -78,7 +75,8 @@ RechazoMarcacion? obtenerRechazoUbicacionMarcacion({
   if (ubicacion == null) {
     return const RechazoMarcacion(
       tipoAlerta: TipoAlerta.marcacionRechazada,
-      mensaje: 'No pudimos validar tu ubicacion antes de registrar la asistencia.',
+      mensaje:
+          'No pudimos validar tu ubicacion antes de registrar la asistencia.',
     );
   }
 
@@ -129,35 +127,139 @@ RechazoMarcacion? obtenerRechazoRostroMarcacion({
 RechazoMarcacion? obtenerRechazoReglaDiariaMarcacion({
   required List<Asistencia> marcacionesHoy,
   required TipoMarcacion tipoMarcacion,
+  DateTime? ahora,
 }) {
-  final yaMarcoEntradaHoy = marcacionesHoy.any(
-    (asistencia) => asistencia.tipoMarcacion == TipoMarcacion.entrada,
-  );
-  final yaMarcoSalidaHoy = marcacionesHoy.any(
-    (asistencia) => asistencia.tipoMarcacion == TipoMarcacion.salida,
-  );
+  final instanteActual = ahora ?? DateTime.now();
+  final fechaBase = marcacionesHoy.isNotEmpty
+      ? marcacionesHoy.first.fechaHora
+      : instanteActual;
+  final resumen = construirResumenJornadaTrabajador(marcacionesHoy, fechaBase);
+  final totalEntradas = marcacionesHoy
+      .where((marcacion) => marcacion.tipoMarcacion == TipoMarcacion.entrada)
+      .length;
+  final totalSalidas = marcacionesHoy
+      .where((marcacion) => marcacion.tipoMarcacion == TipoMarcacion.salida)
+      .length;
 
-  if (tipoMarcacion == TipoMarcacion.entrada && yaMarcoEntradaHoy) {
+  if (tipoMarcacion == TipoMarcacion.entrada) {
+    if (totalEntradas >= 2) {
+      return const RechazoMarcacion(
+        tipoAlerta: TipoAlerta.marcacionRechazada,
+        mensaje:
+            'Ya registraste las dos entradas correspondientes a la jornada de hoy.',
+      );
+    }
+
+    if (resumen.manana.entradaMarcada == null) {
+      final inicioPermitido = resumen.manana.entradaProgramada.subtract(
+        const Duration(minutes: 30),
+      );
+      if (instanteActual.isBefore(inicioPermitido)) {
+        return const RechazoMarcacion(
+          tipoAlerta: TipoAlerta.marcacionRechazada,
+          mensaje:
+              'La entrada de la manana solo puede registrarse desde las 8:00 AM.',
+        );
+      }
+      return null;
+    }
+
+    if (resumen.manana.salidaMarcada == null) {
+      return const RechazoMarcacion(
+        tipoAlerta: TipoAlerta.marcacionRechazada,
+        mensaje:
+            'Primero debes registrar la salida del turno de la mañana antes de marcar una nueva entrada.',
+      );
+    }
+
+    if (resumen.tarde.entradaMarcada != null) {
+      return const RechazoMarcacion(
+        tipoAlerta: TipoAlerta.marcacionRechazada,
+        mensaje:
+            'Ya registraste tus dos entradas de hoy. No necesitas volver a marcar otra entrada.',
+      );
+    }
+
+    final inicioPermitidoEntradaTarde = resumen.tarde.entradaProgramada
+        .subtract(const Duration(minutes: 30));
+    if (instanteActual.isBefore(inicioPermitidoEntradaTarde)) {
+      return const RechazoMarcacion(
+        tipoAlerta: TipoAlerta.marcacionRechazada,
+        mensaje:
+            'La entrada del turno de la tarde solo puede registrarse desde 30 minutos antes del horario oficial.',
+      );
+    }
+
+    return null;
+  }
+
+  if (totalSalidas >= 2) {
     return const RechazoMarcacion(
       tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
-          'Ya registraste tu entrada de hoy. No necesitas volver a marcar otra entrada.',
+          'Ya registraste las dos salidas correspondientes a la jornada de hoy.',
     );
   }
 
-  if (tipoMarcacion == TipoMarcacion.salida && !yaMarcoEntradaHoy) {
+  if (resumen.manana.entradaMarcada == null) {
     return const RechazoMarcacion(
       tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
-          'Primero necesitas registrar una entrada hoy antes de marcar tu salida.',
+          'Primero necesitas registrar la entrada del turno de la mañana antes de marcar una salida.',
     );
   }
 
-  if (tipoMarcacion == TipoMarcacion.salida && yaMarcoSalidaHoy) {
+  if (resumen.manana.salidaMarcada == null) {
+    if (resumen.tarde.entradaMarcada != null &&
+        resumen.tarde.salidaMarcada == null) {
+      final inicioPermitidoSalidaTarde = resumen.tarde.salidaProgramada
+          .subtract(const Duration(minutes: 30));
+      if (instanteActual.isBefore(inicioPermitidoSalidaTarde)) {
+        return const RechazoMarcacion(
+          tipoAlerta: TipoAlerta.marcacionRechazada,
+          mensaje:
+              'La salida de la tarde solo puede registrarse desde 30 minutos antes del horario oficial.',
+        );
+      }
+      return null;
+    }
+
+    final inicioPermitidoSalidaManana = resumen.manana.salidaProgramada
+        .subtract(const Duration(minutes: 10));
+    if (instanteActual.isBefore(inicioPermitidoSalidaManana)) {
+      return const RechazoMarcacion(
+        tipoAlerta: TipoAlerta.marcacionRechazada,
+        mensaje:
+            'La salida de la manana solo puede registrarse desde 10 minutos antes del horario oficial.',
+      );
+    }
+    return null;
+  }
+
+  if (resumen.tarde.entradaMarcada == null) {
     return const RechazoMarcacion(
       tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
-          'Ya registraste tu salida de hoy. No necesitas volver a marcar otra salida.',
+          'Primero debes registrar la entrada del turno de la tarde antes de marcar la salida final.',
+    );
+  }
+
+  if (resumen.tarde.salidaMarcada != null) {
+    return const RechazoMarcacion(
+      tipoAlerta: TipoAlerta.marcacionRechazada,
+      mensaje:
+          'Ya registraste tus dos salidas de hoy. No necesitas volver a marcar otra salida.',
+    );
+  }
+
+  final inicioPermitidoSalidaTarde = resumen.tarde.salidaProgramada.subtract(
+    const Duration(minutes: 30),
+  );
+  if (instanteActual.isBefore(inicioPermitidoSalidaTarde)) {
+    return const RechazoMarcacion(
+      tipoAlerta: TipoAlerta.marcacionRechazada,
+      mensaje:
+          'La salida de la tarde solo puede registrarse desde 30 minutos antes del horario oficial.',
     );
   }
 

@@ -20,15 +20,15 @@ class ModuloPerfilTrabajador extends StatelessWidget {
     final perfil = controlador.perfilActual;
     final nombreCompleto = perfil?.nombreCompleto ?? 'Trabajador';
     final rol = perfil?.rolOCargo ?? 'Personal institucional';
+    final cargo = perfil?.cargo.isNotEmpty == true ? perfil!.cargo : rol;
+    final area = perfil?.area.isNotEmpty == true ? perfil!.area : 'No registrada';
+    final telefono =
+        perfil?.telefono.isNotEmpty == true ? perfil!.telefono : 'No registrado';
     final sede = perfil?.nombreSede ?? 'Pendiente';
     final correoPerfil = perfil?.correoNotificacion;
     final correo = (correoPerfil != null && correoPerfil.isNotEmpty)
         ? correoPerfil
         : (correoSesion ?? 'Sin correo disponible');
-    final inicial = nombreCompleto.trim().isEmpty
-        ? 'T'
-        : nombreCompleto.trim()[0].toUpperCase();
-
     return ListView(
       padding: MedidasSistema.paddingPagina,
       children: [
@@ -104,16 +104,14 @@ class ModuloPerfilTrabajador extends StatelessWidget {
                   Positioned(
                     bottom: -18,
                     child: CircleAvatar(
-                      radius: 46,
-                      backgroundColor: const Color(0xFFF7E8E7),
-                      child: Text(
-                        inicial,
-                        style:
-                            Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                  fontSize: 28,
-                                  color: ColoresSistema.rojoInstitucional,
-                                  fontWeight: FontWeight.w900,
-                                ),
+                      radius: 54,
+                      backgroundColor: Colors.white,
+                      child: Transform.scale(
+                        scale: 1.12,
+                        child: Image.asset(
+                          'assets/imagenes/logo_unachu.png',
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                   ),
@@ -173,9 +171,27 @@ class ModuloPerfilTrabajador extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     _FilaPerfilSimple(
+                      icono: Icons.apartment_outlined,
+                      titulo: 'Area',
+                      valor: area,
+                    ),
+                    const SizedBox(height: 12),
+                    _FilaPerfilSimple(
+                      icono: Icons.badge_outlined,
+                      titulo: 'Cargo',
+                      valor: cargo,
+                    ),
+                    const SizedBox(height: 12),
+                    _FilaPerfilSimple(
                       icono: Icons.email_outlined,
                       titulo: 'Correo institucional',
                       valor: correo,
+                    ),
+                    const SizedBox(height: 12),
+                    _FilaPerfilSimple(
+                      icono: Icons.phone_outlined,
+                      titulo: 'Telefono',
+                      valor: telefono,
                     ),
                     const SizedBox(height: 12),
                     const _FilaPerfilSimple(

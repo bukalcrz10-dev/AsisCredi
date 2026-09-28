@@ -73,6 +73,8 @@ class ControladorAsistencia extends ChangeNotifier {
   PerfilTrabajadorActual? perfilActual;
   ResultadoValidacionUbicacion? resultadoUbicacion;
   ResultadoValidacionFacial? resultadoFacial;
+  DateTime? fechaInicioHistorialSeleccionada;
+  DateTime? fechaFinHistorialSeleccionada;
   DateTimeRange? rangoHistorialSeleccionado;
   FiltroHistorial filtroHistorial = FiltroHistorial.todo;
 
@@ -119,6 +121,13 @@ class ControladorAsistencia extends ChangeNotifier {
     );
   }
 
+  ResumenJornadaTrabajador get resumenJornadaHoy {
+    return construirResumenJornadaTrabajador(
+      _marcacionesDelDia(DateTime.now()),
+      DateTime.now(),
+    );
+  }
+
   // Filtra las marcaciones del mismo dia para aplicar reglas
   // como una sola entrada y una sola salida por jornada.
   List<Asistencia> _marcacionesDelDia(DateTime fecha) {
@@ -128,9 +137,20 @@ class ControladorAsistencia extends ChangeNotifier {
   void actualizarRangoHistorial(DateTimeRange? rango) {
     _actualizarEstadoLocal(() {
       rangoHistorialSeleccionado = rango;
-      if (rango != null) {
-        filtroHistorial = FiltroHistorial.rango;
-      }
+      filtroHistorial =
+          rango == null ? FiltroHistorial.todo : FiltroHistorial.rango;
+    });
+  }
+
+  void actualizarInicioHistorial(DateTime? fechaInicio) {
+    _actualizarEstadoLocal(() {
+      fechaInicioHistorialSeleccionada = fechaInicio;
+    });
+  }
+
+  void actualizarFinHistorial(DateTime? fechaFin) {
+    _actualizarEstadoLocal(() {
+      fechaFinHistorialSeleccionada = fechaFin;
     });
   }
 
@@ -570,14 +590,14 @@ class ControladorAsistencia extends ChangeNotifier {
     );
   }
 
-  Future<void> registrarMarcacion(TipoMarcacion tipoMarcacion) async {
+  Future<bool> registrarMarcacion(TipoMarcacion tipoMarcacion) async {
     final perfil = perfilActual;
-    if (!_validarContextoBasicoMarcacion(perfil)) return;
+    if (!_validarContextoBasicoMarcacion(perfil)) return false;
     final perfilSeguro = perfil!;
 
-    if (!await _validarUbicacionParaMarcacion(tipoMarcacion)) return;
-    if (!await _validarRostroParaMarcacion(tipoMarcacion)) return;
-    if (!await _validarReglasDiariasMarcacion(tipoMarcacion)) return;
+    if (!await _validarUbicacionParaMarcacion(tipoMarcacion)) return false;
+    if (!await _validarRostroParaMarcacion(tipoMarcacion)) return false;
+    if (!await _validarReglasDiariasMarcacion(tipoMarcacion)) return false;
 
     final rutaImagenFacial = resultadoFacial!.rutaImagenCapturada!;
     final ahora = DateTime.now();
@@ -633,9 +653,11 @@ class ControladorAsistencia extends ChangeNotifier {
         cargarHistorial(),
         cargarAlertas(),
       ]);
+      return true;
     } catch (_) {
       mensajeEstado =
           'No pudimos registrar la asistencia en Firebase. Intenta nuevamente en unos segundos.';
+      return false;
     } finally {
       _actualizarEstadoLocal(() {
         guardando = false;

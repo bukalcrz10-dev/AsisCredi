@@ -250,6 +250,82 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
     );
   }
 
+  Future<void> _restablecerContrasenaTrabajador(
+    TrabajadorAdminDemo trabajador,
+    String nuevaContrasena,
+  ) async {
+    setState(() {
+      _guardando = true;
+      _mensajeError = null;
+    });
+
+    try {
+      await _servicioAuthFunctions.restablecerContrasenaTrabajador(
+        uid: trabajador.id,
+        password: nuevaContrasena,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _guardando = false;
+        _mensajeError = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Contrasena restablecida correctamente.'),
+        ),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final partes = <String>[
+        if ((error.code).trim().isNotEmpty) 'Codigo: ${error.code}',
+        if ((error.message ?? '').trim().isNotEmpty)
+          'Mensaje: ${error.message}',
+      ];
+
+      setState(() {
+        _guardando = false;
+        _mensajeError = partes.isNotEmpty
+            ? partes.join(' | ')
+            : 'No se pudo restablecer la contrasena del trabajador.';
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _guardando = false;
+        _mensajeError = 'No se pudo restablecer la contrasena del trabajador.';
+      });
+    }
+  }
+
+  Future<void> _abrirDialogoRestablecerContrasena(
+    TrabajadorAdminDemo trabajador,
+  ) async {
+    final nuevaContrasena = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _DialogoRestablecerContrasenaTrabajador(
+        nombreTrabajador: trabajador.nombreCompleto,
+      ),
+    );
+
+    if (nuevaContrasena == null || !mounted) {
+      return;
+    }
+
+    await _restablecerContrasenaTrabajador(trabajador, nuevaContrasena);
+  }
+
   List<TrabajadorAdminDemo> get _trabajadoresFiltrados {
     final consulta = _busqueda.trim().toLowerCase();
     if (consulta.isEmpty) {
@@ -432,6 +508,11 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
                       onEditar: _guardando
                           ? null
                           : () => _abrirDialogoEditarTrabajador(trabajador),
+                      onRestablecerContrasena: _guardando
+                          ? null
+                          : () => _abrirDialogoRestablecerContrasena(
+                              trabajador,
+                            ),
                       onAlternarEstado: _guardando
                           ? null
                           : () => _alternarEstadoTrabajador(trabajador),
@@ -735,6 +816,124 @@ class _ResultadoDialogoTrabajadorAdmin {
   final String password;
 }
 
+class _DialogoRestablecerContrasenaTrabajador extends StatefulWidget {
+  const _DialogoRestablecerContrasenaTrabajador({
+    required this.nombreTrabajador,
+  });
+
+  final String nombreTrabajador;
+
+  @override
+  State<_DialogoRestablecerContrasenaTrabajador> createState() =>
+      _DialogoRestablecerContrasenaTrabajadorState();
+}
+
+class _DialogoRestablecerContrasenaTrabajadorState
+    extends State<_DialogoRestablecerContrasenaTrabajador> {
+  late final TextEditingController _passwordController;
+  late final TextEditingController _confirmacionController;
+  bool _mostrarPassword = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController = TextEditingController();
+    _confirmacionController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmacionController.dispose();
+    super.dispose();
+  }
+
+  void _confirmar() {
+    final password = _passwordController.text.trim();
+    final confirmacion = _confirmacionController.text.trim();
+
+    if (password.isEmpty || confirmacion.isEmpty) {
+      return;
+    }
+
+    if (password.length < 6 || password != confirmacion) {
+      return;
+    }
+
+    Navigator.of(context).pop(password);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        'Restablecer contrasena',
+        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
+      ),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Define una nueva contrasena para ${widget.nombreTrabajador}.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: ColoresSistema.textoSecundario,
+                    ),
+              ),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _passwordController,
+                obscureText: !_mostrarPassword,
+                decoration: InputDecoration(
+                  labelText: 'Nueva contrasena',
+                  helperText: 'Minimo 6 caracteres.',
+                  suffixIcon: IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _mostrarPassword = !_mostrarPassword;
+                      });
+                    },
+                    icon: Icon(
+                      _mostrarPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _confirmacionController,
+                obscureText: !_mostrarPassword,
+                decoration: const InputDecoration(
+                  labelText: 'Confirmar contrasena',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton.icon(
+          onPressed: _confirmar,
+          icon: const Icon(Icons.lock_reset_outlined),
+          label: const Text('Restablecer'),
+        ),
+      ],
+    );
+  }
+}
+
 class _ChipInfoAdmin extends StatelessWidget {
   const _ChipInfoAdmin({
     required this.icono,
@@ -790,11 +989,13 @@ class _TarjetaTrabajadorAdmin extends StatelessWidget {
   const _TarjetaTrabajadorAdmin({
     required this.trabajador,
     required this.onEditar,
+    required this.onRestablecerContrasena,
     required this.onAlternarEstado,
   });
 
   final TrabajadorAdminDemo trabajador;
   final VoidCallback? onEditar;
+  final VoidCallback? onRestablecerContrasena;
   final VoidCallback? onAlternarEstado;
 
   @override
@@ -896,6 +1097,12 @@ class _TarjetaTrabajadorAdmin extends StatelessWidget {
             tooltip: 'Editar trabajador',
             onPressed: onEditar,
             icon: const Icon(Icons.edit_outlined),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'Restablecer contrasena',
+            onPressed: onRestablecerContrasena,
+            icon: const Icon(Icons.lock_reset_outlined),
           ),
           const SizedBox(width: 4),
           IconButton(

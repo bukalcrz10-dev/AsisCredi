@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../app/diseno_sistema.dart';
 import '../../dominio/entidades/tipo_marcacion.dart';
 import '../controladores/controlador_asistencia.dart';
+import '../controladores/controlador_asistencia_auxiliares.dart';
+import 'soporte_panel_trabajador.dart';
 
 class ModuloAsistenciaTrabajador extends StatelessWidget {
   const ModuloAsistenciaTrabajador({
@@ -17,11 +19,13 @@ class ModuloAsistenciaTrabajador extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entrada = controlador.ultimaEntrada;
-    final salida = controlador.ultimaSalida;
-    final totalCompletados = (entrada != null ? 1 : 0) + (salida != null ? 1 : 0);
+    final resumen = controlador.resumenJornadaHoy;
+    final totalCompletados = resumen.totalBloquesCompletos;
     final progreso = totalCompletados / 2;
     final textoProgreso = '$totalCompletados/2';
+    final siguienteTipo = resumen.siguienteTipoMarcacion;
+    final siguienteEtiqueta = resumen.siguienteEtiquetaAccion;
+    final mensajeBloqueo = resumen.mensajeBloqueoJornada;
 
     return ListView(
       padding: MedidasSistema.paddingPagina,
@@ -72,7 +76,7 @@ class ModuloAsistenciaTrabajador extends StatelessWidget {
                   ),
                   child: Text(
                     totalCompletados == 2
-                        ? 'Jornada completada'
+                        ? '2 completados'
                         : '$totalCompletados completados',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           color: ColoresSistema.verdeInstitucional,
@@ -102,38 +106,33 @@ class ModuloAsistenciaTrabajador extends StatelessWidget {
                         ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                _TarjetaHorarioDia(
-                  entrada: entrada == null
-                      ? 'Pendiente'
-                      : _formatearSoloHora(entrada.fechaHora),
-                  salida: salida == null
-                      ? 'Pendiente'
-                      : _formatearSoloHora(salida.fechaHora),
-                ),
                 const SizedBox(height: 12),
-                if (entrada == null)
+                _TarjetaHorarioTramo(tramo: resumen.manana),
+                const SizedBox(height: 12),
+                _TarjetaHorarioTramo(tramo: resumen.tarde),
+                const SizedBox(height: 14),
+                if (mensajeBloqueo != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TarjetaMensajePanel(
+                      mensaje: mensajeBloqueo,
+                      color: ColoresSistema.rojoInstitucional,
+                      icono: Icons.block_outlined,
+                    ),
+                  ),
+                if (siguienteTipo != null && siguienteEtiqueta != null)
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: () =>
-                          onAbrirProcesoMarcacion(TipoMarcacion.entrada),
-                      icon: const Icon(Icons.login),
-                      label: const Text('Registrar entrada'),
+                      onPressed: () => onAbrirProcesoMarcacion(siguienteTipo),
+                      icon: Icon(
+                        siguienteTipo == TipoMarcacion.entrada
+                            ? Icons.login
+                            : Icons.logout,
+                      ),
+                      label: Text(siguienteEtiqueta),
                     ),
-                  )
-                else if (salida == null)
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () =>
-                          onAbrirProcesoMarcacion(TipoMarcacion.salida),
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Registrar salida'),
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
+                  ),
               ],
             ),
           ),
@@ -143,106 +142,70 @@ class ModuloAsistenciaTrabajador extends StatelessWidget {
   }
 }
 
-class _TarjetaHorarioDia extends StatelessWidget {
-  const _TarjetaHorarioDia({
-    required this.entrada,
-    required this.salida,
+class _TarjetaHorarioTramo extends StatelessWidget {
+  const _TarjetaHorarioTramo({
+    required this.tramo,
   });
 
-  final String entrada;
-  final String salida;
+  final TramoJornadaLaboral tramo;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _BloqueHorario(
-          etiqueta: 'Entrada',
-          valor: entrada,
-          icono: Icons.login,
-        ),
-        const SizedBox(height: 10),
-        _BloqueHorario(
-          etiqueta: 'Salida',
-          valor: salida,
-          icono: Icons.logout,
-        ),
-      ],
-    );
-  }
-}
-
-class _BloqueHorario extends StatelessWidget {
-  const _BloqueHorario({
-    required this.etiqueta,
-    required this.valor,
-    required this.icono,
-  });
-
-  final String etiqueta;
-  final String valor;
-  final IconData icono;
-
-  @override
-  Widget build(BuildContext context) {
-    final pendiente = valor == 'Pendiente';
-    final colorEstado = pendiente
-        ? ColoresSistema.rojoInstitucional
-        : ColoresSistema.verdeExito;
+    final colorBase = tramo.completo
+        ? ColoresSistema.verdeExito
+        : ColoresSistema.rojoInstitucional;
 
     return Container(
       width: double.infinity,
-      padding: MedidasSistema.paddingBloque,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colorEstado.withValues(alpha: 0.07),
+        color: colorBase.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(MedidasSistema.radioBloque),
-        border: Border.all(color: colorEstado.withValues(alpha: 0.2)),
+        border: Border.all(color: colorBase.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 18,
-            backgroundColor: colorEstado.withValues(alpha: 0.14),
-            foregroundColor: colorEstado,
-            child: Icon(icono, size: 18),
+            radius: 22,
+            backgroundColor: colorBase,
+            child: Text(
+              '${tramo.orden}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  etiqueta.toUpperCase(),
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontSize: 11,
-                        letterSpacing: 1,
-                        color: ColoresSistema.textoSuave,
-                        fontWeight: FontWeight.w700,
-                      ),
+                _FilaHorarioTramo(
+                  etiqueta: 'ENTRADA',
+                  horaProgramada: formatearHoraAmPmPanel(tramo.entradaProgramada),
+                  completado: tramo.entradaMarcada != null,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  valor,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: ColoresSistema.textoFuerte,
-                      ),
+                const SizedBox(height: 8),
+                _FilaHorarioTramo(
+                  etiqueta: 'SALIDA',
+                  horaProgramada: formatearHoraAmPmPanel(tramo.salidaProgramada),
+                  completado: tramo.salidaMarcada != null,
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 14),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: colorEstado.withValues(alpha: 0.12),
+              color: colorBase.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(MedidasSistema.radioChip),
             ),
             child: Text(
-              pendiente ? 'PENDIENTE' : 'COMPLETADO',
+              tramo.completo ? 'COMPLETO' : 'PENDIENTE',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     fontSize: 10,
-                    color: colorEstado,
+                    color: colorBase,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.7,
                   ),
@@ -254,8 +217,53 @@ class _BloqueHorario extends StatelessWidget {
   }
 }
 
-String _formatearSoloHora(DateTime fechaHora) {
-  final hora = fechaHora.hour.toString().padLeft(2, '0');
-  final minuto = fechaHora.minute.toString().padLeft(2, '0');
-  return '$hora:$minuto';
+class _FilaHorarioTramo extends StatelessWidget {
+  const _FilaHorarioTramo({
+    required this.etiqueta,
+    required this.horaProgramada,
+    required this.completado,
+  });
+
+  final String etiqueta;
+  final String horaProgramada;
+  final bool completado;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 62,
+          child: Text(
+            etiqueta,
+            maxLines: 1,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontSize: 9,
+                  letterSpacing: 0.8,
+                  color: ColoresSistema.textoSuave,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            horaProgramada,
+            maxLines: 1,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: ColoresSistema.textoFuerte,
+                ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Icon(
+          completado ? Icons.check_circle : Icons.radio_button_unchecked,
+          size: 15,
+          color:
+              completado ? ColoresSistema.verdeExito : ColoresSistema.textoSuave,
+        ),
+      ],
+    );
+  }
 }

@@ -1,0 +1,42 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function activo() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.activo == true;
+    }
+
+    function administrador() {
+      return activo()
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'administrador';
+    }
+
+    match /usuarios/{usuarioId} {
+      allow get: if request.auth != null && request.auth.uid == usuarioId;
+      allow read, write: if administrador();
+    }
+
+    match /sedes/{sedeId} {
+      allow read: if activo();
+      allow write: if administrador();
+    }
+
+    match /asistencias/{asistenciaId} {
+      allow read: if administrador()
+        || (activo() && resource.data.usuarioId == request.auth.uid);
+      allow create: if administrador()
+        || (activo() && request.resource.data.usuarioId == request.auth.uid);
+      allow update, delete: if administrador();
+    }
+
+    match /alertas/{alertaId} {
+      allow read: if administrador()
+        || (activo() && resource.data.usuarioId == request.auth.uid);
+      allow create: if administrador()
+        || (activo() && request.resource.data.usuarioId == request.auth.uid
+          && request.resource.data.atendida == false);
+      allow update, delete: if administrador();
+    }
+  }
+}

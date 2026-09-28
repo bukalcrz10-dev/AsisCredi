@@ -13,4 +13,8 @@ abstract class RepositorioAsistencias {
 
   // Recupera las marcaciones recientes para consulta administrativa.
   Future<List<Asistencia>> obtenerAsistencias();
+
+  // Elimina una marcacion puntual cuando se necesita regularizar o limpiar
+  // duplicados administrativos del mismo bloque.
+  Future<void> eliminarAsistencia(String id);
 }

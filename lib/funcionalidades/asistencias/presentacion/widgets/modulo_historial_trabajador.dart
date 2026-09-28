@@ -9,16 +9,19 @@ class ModuloHistorialTrabajador extends StatelessWidget {
   const ModuloHistorialTrabajador({
     super.key,
     required this.controlador,
-    required this.onSeleccionarRango,
+    required this.onSeleccionarFechaInicio,
+    required this.onSeleccionarFechaFin,
+    required this.onBuscarRango,
   });
 
   final ControladorAsistencia controlador;
-  final Future<void> Function() onSeleccionarRango;
+  final Future<void> Function() onSeleccionarFechaInicio;
+  final Future<void> Function() onSeleccionarFechaFin;
+  final Future<void> Function() onBuscarRango;
 
   @override
   Widget build(BuildContext context) {
     final resumenes = agruparHistorialPorDia(controlador.historialFiltrado);
-    final rangoActual = controlador.rangoHistorialSeleccionado;
 
     return ListView(
       padding: MedidasSistema.paddingPagina,
@@ -59,27 +62,39 @@ class ModuloHistorialTrabajador extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _CampoFiltroFecha(
-                        valor: rangoActual == null
-                            ? 'Inicio'
-                            : formatearFechaPanel(rangoActual.start),
+                        etiqueta: 'Inicio',
+                        valor: controlador.fechaInicioHistorialSeleccionada == null
+                            ? ''
+                            : formatearFechaPanel(
+                                controlador.fechaInicioHistorialSeleccionada!,
+                              ),
+                        onTap: controlador.cargandoHistorial
+                            ? null
+                            : onSeleccionarFechaInicio,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: _CampoFiltroFecha(
-                        valor: rangoActual == null
-                            ? 'Fin'
-                            : formatearFechaPanel(rangoActual.end),
+                        etiqueta: 'Fin',
+                        valor: controlador.fechaFinHistorialSeleccionada == null
+                            ? ''
+                            : formatearFechaPanel(
+                                controlador.fechaFinHistorialSeleccionada!,
+                              ),
+                        onTap:
+                            controlador.cargandoHistorial ? null : onSeleccionarFechaFin,
                       ),
                     ),
                     const SizedBox(width: 8),
                     SizedBox(
                       height: 44,
                       width: 44,
-                      child: FilledButton.tonal(
+                      child: FilledButton(
                         onPressed:
-                            controlador.cargandoHistorial ? null : onSeleccionarRango,
+                            controlador.cargandoHistorial ? null : onBuscarRango,
                         style: FilledButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
                           padding: EdgeInsets.zero,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
@@ -167,6 +182,7 @@ class _FilaCabeceraInforme extends StatelessWidget {
       child: const Row(
         children: [
           _CeldaCabecera(texto: 'Fecha', ancho: 78),
+          _CeldaCabecera(texto: 'Bloque', ancho: 68),
           _CeldaCabecera(texto: 'H. Entrada', ancho: 96),
           _CeldaCabecera(texto: 'H. Salida', ancho: 96),
           _CeldaCabecera(texto: 'Tardanza', ancho: 68),
@@ -230,6 +246,10 @@ class _FilaInformeAsistencia extends StatelessWidget {
             texto: formatearFechaPanel(resumen.fecha),
             ancho: 78,
           ),
+          _CeldaDato(
+            texto: _textoBloque(resumen),
+            ancho: 68,
+          ),
           _CeldaDatoConEstado(
             texto: resumen.entrada == null
                 ? '--:--'
@@ -267,6 +287,26 @@ class _FilaInformeAsistencia extends StatelessWidget {
       ),
     );
   }
+}
+
+String _textoBloque(ResumenDiaHistorial resumen) {
+  final tieneManana =
+      resumen.entradaManana != null || resumen.salidaManana != null;
+  final tieneTarde = resumen.entradaTarde != null || resumen.salidaTarde != null;
+
+  if (tieneManana && tieneTarde) {
+    return '1 y 2';
+  }
+
+  if (tieneTarde) {
+    return '2';
+  }
+
+  if (tieneManana) {
+    return '1';
+  }
+
+  return '--';
 }
 
 class _CeldaDato extends StatelessWidget {
@@ -400,14 +440,19 @@ class _BotonInforme extends StatelessWidget {
 
 class _CampoFiltroFecha extends StatelessWidget {
   const _CampoFiltroFecha({
+    required this.etiqueta,
     required this.valor,
+    this.onTap,
   });
 
+  final String etiqueta;
   final String valor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final estaVacio = valor.isEmpty;
+    final child = Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
@@ -417,15 +462,26 @@ class _CampoFiltroFecha extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Text(
-        valor,
+        estaVacio ? etiqueta : valor,
         maxLines: 1,
         overflow: TextOverflow.visible,
         softWrap: false,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontSize: 11,
               fontWeight: FontWeight.w600,
+              color: estaVacio ? ColoresSistema.textoSuave : null,
             ),
       ),
+    );
+
+    if (onTap == null) {
+      return child;
+    }
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: child,
     );
   }
 }

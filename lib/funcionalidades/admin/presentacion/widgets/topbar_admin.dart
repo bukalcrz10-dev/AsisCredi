@@ -28,6 +28,7 @@ class TopbarAdmin extends StatelessWidget {
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
@@ -51,20 +52,48 @@ class TopbarAdmin extends StatelessWidget {
               ],
             ),
           ),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: const [
-              _ChipTopbarAdmin(
-                icono: Icons.calendar_today_outlined,
-                texto: '20/04/2026',
-              ),
-              _ChipTopbarAdmin(
-                icono: Icons.account_balance_outlined,
-                texto: 'UNACHU',
-              ),
-            ],
+          const SizedBox(width: 18),
+          const _FranjaTopbarAdmin(),
+        ],
+      ),
+    );
+  }
+}
+
+class _FranjaTopbarAdmin extends StatelessWidget {
+  const _FranjaTopbarAdmin();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: ColoresSistema.fondoTarjeta,
+        borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
+        border: Border.all(color: ColoresSistema.bordeIntermedio),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.start,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 18,
+        runSpacing: 10,
+        children: const [
+          _ItemFranjaTopbarAdmin(
+            icono: Icons.today_outlined,
+            titulo: 'Fecha actual',
+            valor: '24/04/2026',
+          ),
+          _SeparadorFranjaTopbarAdmin(),
+          _ItemFranjaTopbarAdmin(
+            icono: Icons.approval_outlined,
+            titulo: 'Estado',
+            valor: 'Operativo',
+          ),
+          _SeparadorFranjaTopbarAdmin(),
+          _ItemFranjaTopbarAdmin(
+            icono: Icons.domain_verification_outlined,
+            titulo: 'Jornada',
+            valor: 'Dia laborable',
           ),
         ],
       ),
@@ -72,37 +101,58 @@ class TopbarAdmin extends StatelessWidget {
   }
 }
 
-class _ChipTopbarAdmin extends StatelessWidget {
-  const _ChipTopbarAdmin({
+class _ItemFranjaTopbarAdmin extends StatelessWidget {
+  const _ItemFranjaTopbarAdmin({
     required this.icono,
-    required this.texto,
+    required this.titulo,
+    required this.valor,
   });
 
   final IconData icono;
-  final String texto;
+  final String titulo;
+  final String valor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icono, size: 18, color: ColoresSistema.rojoInstitucional),
+        const SizedBox(width: 10),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              titulo,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: ColoresSistema.textoSuave,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              valor,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SeparadorFranjaTopbarAdmin extends StatelessWidget {
+  const _SeparadorFranjaTopbarAdmin();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: ColoresSistema.fondoChip,
-        borderRadius: BorderRadius.circular(MedidasSistema.radioChip),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icono, size: 16, color: ColoresSistema.iconoSuave),
-          const SizedBox(width: 8),
-          Text(
-            texto,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ],
-      ),
+      width: 1,
+      height: 34,
+      color: ColoresSistema.bordeIntermedio,
     );
   }
 }

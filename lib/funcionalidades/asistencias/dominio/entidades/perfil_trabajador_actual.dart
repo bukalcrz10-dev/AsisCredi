@@ -8,6 +8,9 @@ class PerfilTrabajadorActual {
     required this.usuarioId,
     required this.nombreCompleto,
     required this.rolOCargo,
+    required this.area,
+    required this.cargo,
+    required this.telefono,
     required this.sedeId,
     required this.nombreSede,
     required this.correoNotificacion,
@@ -21,6 +24,9 @@ class PerfilTrabajadorActual {
   final String usuarioId;
   final String nombreCompleto;
   final String rolOCargo;
+  final String area;
+  final String cargo;
+  final String telefono;
   final String sedeId;
   final String nombreSede;
   final String correoNotificacion;
@@ -44,6 +50,9 @@ class PerfilTrabajadorActual {
               ? nombreCompleto.trim()
               : 'Trabajador',
       rolOCargo: 'Trabajador',
+      area: '',
+      cargo: 'Trabajador',
+      telefono: '',
       sedeId: '',
       nombreSede: 'Pendiente',
       correoNotificacion: correo ?? '',

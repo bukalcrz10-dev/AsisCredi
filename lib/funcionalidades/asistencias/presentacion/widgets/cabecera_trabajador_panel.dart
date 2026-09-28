@@ -17,9 +17,12 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final compacto = mediaQuery.orientation == Orientation.landscape;
+
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      margin: EdgeInsets.fromLTRB(12, compacto ? 6 : 10, 12, 0),
       decoration: BoxDecoration(
         color: ColoresSistema.fondoTarjeta,
         borderRadius: BorderRadius.circular(MedidasSistema.radioTarjeta),
@@ -37,7 +40,10 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            padding: EdgeInsets.symmetric(
+              horizontal: compacto ? 14 : 18,
+              vertical: compacto ? 8 : 10,
+            ),
             decoration: const BoxDecoration(
               color: ColoresSistema.rojoInstitucional,
               borderRadius: BorderRadius.only(
@@ -51,8 +57,9 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
                   'UNACHU',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: Colors.white,
-                        letterSpacing: 1.2,
+                        letterSpacing: compacto ? 1.0 : 1.2,
                         fontWeight: FontWeight.w800,
+                        fontSize: compacto ? 12 : null,
                       ),
                 ),
                 const Spacer(),
@@ -72,6 +79,7 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w500,
+                            fontSize: compacto ? 16 : null,
                           ),
                     ),
                   ],
@@ -80,48 +88,55 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+            padding: EdgeInsets.fromLTRB(
+              compacto ? 14 : 18,
+              compacto ? 12 : 18,
+              compacto ? 14 : 18,
+              compacto ? 12 : 18,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Bienvenido',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: ColoresSistema.textoSuave,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                const SizedBox(height: 8),
+                if (!compacto) ...[
+                  Text(
+                    'Bienvenido',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: ColoresSistema.textoSuave,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 Text(
                   nombre,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontSize: 24,
+                        fontSize: compacto ? 20 : 24,
                         color: ColoresSistema.textoTitulo,
                         height: 1.1,
                       ),
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: compacto ? 8 : 10),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.location_on,
                       color: ColoresSistema.rojoInstitucional,
-                      size: 28,
+                      size: compacto ? 24 : 28,
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: compacto ? 6 : 8),
                     Expanded(
                       child: Text(
                         sede,
                         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                               color: ColoresSistema.textoFuerte,
-                              fontSize: 21,
+                              fontSize: compacto ? 18 : 21,
                               fontWeight: FontWeight.w500,
                             ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: compacto ? 10 : 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,

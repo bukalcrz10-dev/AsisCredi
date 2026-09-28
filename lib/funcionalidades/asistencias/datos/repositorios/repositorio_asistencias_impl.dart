@@ -77,4 +77,9 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
     asistencias.sort((a, b) => b.fechaHora.compareTo(a.fechaHora));
     return asistencias;
   }
+
+  @override
+  Future<void> eliminarAsistencia(String id) {
+    return _fuenteDatos.eliminarAsistencia(id);
+  }
 }
