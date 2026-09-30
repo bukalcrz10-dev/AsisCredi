@@ -6,9 +6,8 @@ import '../../../../nucleo/constantes/colecciones_firebase.dart';
 // Esta capa se encarga solo del acceso directo a Firebase y no conoce
 // pantallas ni reglas de interfaz.
 class FuenteDatosAsistenciasFirestore {
-  FuenteDatosAsistenciasFirestore({
-    FirebaseFirestore? firestore,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance;
+  FuenteDatosAsistenciasFirestore({FirebaseFirestore? firestore})
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
@@ -37,20 +36,20 @@ class FuenteDatosAsistenciasFirestore {
   }
 
   // Consulta las asistencias del trabajador ordenadas desde la mas reciente.
-  Future<List<MapEntry<String, Map<String, dynamic>>>> obtenerAsistenciasPorUsuario(
-    String usuarioId,
-  ) async {
+  Future<List<MapEntry<String, Map<String, dynamic>>>>
+  obtenerAsistenciasPorUsuario(String usuarioId) async {
     final consulta = await _firestore
         .collection(ColeccionesFirebase.asistencias)
         .where('usuarioId', isEqualTo: usuarioId)
-        .get();
+        .get(const GetOptions(source: Source.server));
 
     return consulta.docs
         .map((documento) => MapEntry(documento.id, documento.data()))
         .toList();
   }
 
-  Future<List<MapEntry<String, Map<String, dynamic>>>> obtenerAsistencias() async {
+  Future<List<MapEntry<String, Map<String, dynamic>>>>
+  obtenerAsistencias() async {
     final consulta = await _firestore
         .collection(ColeccionesFirebase.asistencias)
         .orderBy('fechaHora', descending: true)

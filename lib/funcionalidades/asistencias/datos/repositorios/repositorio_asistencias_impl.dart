@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../dominio/entidades/asistencia.dart';
 import '../../dominio/repositorios/repositorio_asistencias.dart';
 import '../fuentes_datos/fuente_datos_asistencias_firestore.dart';
@@ -7,14 +9,22 @@ import '../modelos/modelo_asistencia.dart';
 // Su trabajo es traducir entre el negocio y la persistencia,
 // dejando la UI aislada de los detalles de Firestore.
 class RepositorioAsistenciasImpl implements RepositorioAsistencias {
-  RepositorioAsistenciasImpl(this._fuenteDatos);
+  RepositorioAsistenciasImpl(
+    this._fuenteDatos, {
+    this.marcacionUnicaPorBloque = false,
+  });
+
+  final bool marcacionUnicaPorBloque;
 
   final FuenteDatosAsistenciasFirestore _fuenteDatos;
 
   @override
   Future<String> registrarAsistencia(Asistencia asistencia) async {
-    final idFinal =
-        asistencia.id.isNotEmpty ? asistencia.id : _fuenteDatos.crearId();
+    final idFinal = asistencia.id.isNotEmpty
+        ? asistencia.id
+        : marcacionUnicaPorBloque
+        ? idMarcacionPorBloque(asistencia)
+        : _fuenteDatos.crearId();
 
     final asistenciaConId = Asistencia(
       id: idFinal,
@@ -35,23 +45,26 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
 
     final modelo = ModeloAsistencia.desdeEntidad(asistenciaConId);
 
-    await _fuenteDatos.guardarAsistencia(
-      id: idFinal,
-      datos: modelo.aMapa(),
-    );
+    await _fuenteDatos.guardarAsistencia(id: idFinal, datos: modelo.aMapa());
 
     return idFinal;
   }
 
   @override
-  Future<List<Asistencia>> obtenerAsistenciasPorUsuario(String usuarioId) async {
-    final documentos = await _fuenteDatos.obtenerAsistenciasPorUsuario(usuarioId);
+  Future<List<Asistencia>> obtenerAsistenciasPorUsuario(
+    String usuarioId,
+  ) async {
+    final documentos = await _fuenteDatos.obtenerAsistenciasPorUsuario(
+      usuarioId,
+    );
 
     final asistencias = documentos
-        .map((documento) => ModeloAsistencia.desdeMapa(
-              documento.value,
-              documento.key,
-            ).aEntidad())
+        .map(
+          (documento) => ModeloAsistencia.desdeMapa(
+            documento.value,
+            documento.key,
+          ).aEntidad(),
+        )
         .toList();
 
     // Ordenamos localmente para evitar depender de un indice compuesto
@@ -68,10 +81,12 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
     final documentos = await _fuenteDatos.obtenerAsistencias();
 
     final asistencias = documentos
-        .map((documento) => ModeloAsistencia.desdeMapa(
-              documento.value,
-              documento.key,
-            ).aEntidad())
+        .map(
+          (documento) => ModeloAsistencia.desdeMapa(
+            documento.value,
+            documento.key,
+          ).aEntidad(),
+        )
         .toList();
 
     asistencias.sort((a, b) => b.fechaHora.compareTo(a.fechaHora));
@@ -82,4 +97,16 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
   Future<void> eliminarAsistencia(String id) {
     return _fuenteDatos.eliminarAsistencia(id);
   }
+}
+
+// Los clientes actualizados escriben el mismo documento para el mismo evento.
+// Las reglas existentes permiten crear al trabajador, pero no sobrescribir.
+String idMarcacionPorBloque(Asistencia asistencia) {
+  final fecha = asistencia.fechaHora;
+  final dia =
+      '${fecha.year}${fecha.month.toString().padLeft(2, '0')}${fecha.day.toString().padLeft(2, '0')}';
+  final limite = asistencia.tipoMarcacion.name == 'entrada' ? 13 : 14;
+  final bloque = fecha.hour < limite ? 'manana' : 'tarde';
+  final usuario = base64Url.encode(utf8.encode(asistencia.usuarioId));
+  return 'marcacion_${usuario}_${dia}_${bloque}_${asistencia.tipoMarcacion.name}';
 }

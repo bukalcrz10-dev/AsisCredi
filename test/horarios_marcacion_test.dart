@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:asistencia_app/funcionalidades/asistencias/datos/repositorios/repositorio_asistencias_impl.dart';
 import 'package:asistencia_app/funcionalidades/asistencias/dominio/entidades/asistencia.dart';
 import 'package:asistencia_app/funcionalidades/asistencias/dominio/entidades/tipo_marcacion.dart';
 import 'package:asistencia_app/funcionalidades/asistencias/presentacion/controladores/controlador_asistencia_auxiliares.dart';
@@ -26,7 +27,7 @@ void main() {
     marca(TipoMarcacion.entrada, 15, 0),
     marca(TipoMarcacion.salida, 19, 0),
   ];
-  final aperturas = [hora(8, 0), hora(12, 50), hora(14, 30), hora(18, 30)];
+  final aperturas = [hora(8, 0), hora(13, 0), hora(14, 30), hora(18, 30)];
 
   for (var paso = 0; paso < jornada.length; paso++) {
     test(
@@ -84,7 +85,7 @@ void main() {
     expect(resumen.tarde.tardanza, const Duration(minutes: 11));
   });
 
-  test('Mantiene la secuencia y rechaza marcaciones adicionales', () {
+  test('Cada turno requiere su entrada y rechaza marcaciones adicionales', () {
     expect(
       obtenerRechazoReglaDiariaMarcacion(
         marcacionesHoy: [],
@@ -99,7 +100,7 @@ void main() {
         tipoMarcacion: TipoMarcacion.entrada,
         ahora: hora(15, 0),
       ),
-      isNotNull,
+      isNull,
     );
     for (final tipo in TipoMarcacion.values) {
       expect(
@@ -111,5 +112,137 @@ void main() {
         isNotNull,
       );
     }
+  });
+  final cierres = [hora(12, 50), hora(13, 31), hora(18, 21), hora(19, 31)];
+  final etiquetas = [
+    'Registrar entrada mañana',
+    'Registrar salida mañana',
+    'Registrar entrada tarde',
+    'Registrar salida tarde',
+  ];
+  for (var paso = 0; paso < 4; paso++) {
+    test(
+      'Ventana $paso: boton y validacion coinciden en ambos extremos',
+      () {
+        final anteriores = jornada.take(paso).toList();
+        final resumen = construirResumenJornadaTrabajador(
+          anteriores,
+          hora(0, 0),
+        );
+        for (final instante in [
+          aperturas[paso],
+          cierres[paso].subtract(const Duration(microseconds: 1)),
+        ]) {
+          expect(
+            resumen.siguienteTipoMarcacionPara(instante),
+            jornada[paso].tipoMarcacion,
+          );
+          expect(
+            resumen.siguienteEtiquetaAccionPara(instante),
+            etiquetas[paso],
+          );
+          expect(
+            obtenerRechazoReglaDiariaMarcacion(
+              marcacionesHoy: anteriores,
+              tipoMarcacion: jornada[paso].tipoMarcacion,
+              ahora: instante,
+            ),
+            isNull,
+          );
+        }
+        for (final instante in [
+          aperturas[paso].subtract(const Duration(microseconds: 1)),
+          cierres[paso],
+        ]) {
+          expect(resumen.siguienteTipoMarcacionPara(instante), isNull);
+          expect(resumen.siguienteEtiquetaAccionPara(instante), isNull);
+          expect(
+            obtenerRechazoReglaDiariaMarcacion(
+              marcacionesHoy: anteriores,
+              tipoMarcacion: jornada[paso].tipoMarcacion,
+              ahora: instante,
+            ),
+            isNotNull,
+          );
+        }
+        final registrada = [...anteriores, jornada[paso]];
+        expect(
+          construirResumenJornadaTrabajador(
+            registrada,
+            hora(0, 0),
+          ).siguienteTipoMarcacionPara(jornada[paso].fechaHora),
+          isNull,
+        );
+        expect(
+          obtenerRechazoReglaDiariaMarcacion(
+            marcacionesHoy: registrada,
+            tipoMarcacion: jornada[paso].tipoMarcacion,
+            ahora: jornada[paso].fechaHora,
+          ),
+          isNotNull,
+        );
+      },
+    );
+  }
+
+  test(
+    'Salida matutina espera a las 13:00 y no acepta entrada de otro bloque',
+    () {
+      expect(
+        obtenerRechazoReglaDiariaMarcacion(
+          marcacionesHoy: [jornada.first],
+          tipoMarcacion: TipoMarcacion.salida,
+          ahora: hora(12, 55),
+        ),
+        isNotNull,
+      );
+      expect(
+        obtenerRechazoReglaDiariaMarcacion(
+          marcacionesHoy: [jornada.first],
+          tipoMarcacion: TipoMarcacion.salida,
+          ahora: hora(19, 0),
+        ),
+        isNotNull,
+      );
+    },
+  );
+
+  test('Un turno de tarde independiente conserva pendientes de la manana', () {
+    final resumen = construirResumenJornadaTrabajador([], hora(0, 0));
+    expect(
+      resumen.siguienteEtiquetaAccionPara(hora(14, 30)),
+      'Registrar entrada tarde',
+    );
+    final tarde = construirResumenJornadaTrabajador([jornada[2]], hora(0, 0));
+    expect(tarde.siguienteTipoMarcacionPara(hora(19, 0)), TipoMarcacion.salida);
+    expect(tarde.manana.completo, false);
+  });
+
+  test('Identificador unico por trabajador, dia, bloque y tipo', () {
+    final id = idMarcacionPorBloque(jornada.first);
+    expect(idMarcacionPorBloque(marca(TipoMarcacion.entrada, 9, 0)), id);
+    expect(jornada.map(idMarcacionPorBloque).toSet(), hasLength(4));
+    final otro = Asistencia(
+      id: '',
+      usuarioId: 'otro',
+      nombreUsuario: 'Otro',
+      sedeId: 'sede',
+      tipoMarcacion: TipoMarcacion.entrada,
+      fechaHora: hora(8, 30),
+      latitud: 0,
+      longitud: 0,
+      dentroDeZona: true,
+      rostroValidado: true,
+    );
+    expect(idMarcacionPorBloque(otro), isNot(id));
+  });
+
+  test('Una hoja antigua no se reutiliza en otro turno ni otro dia', () {
+    expect(mismoTurnoMarcacion(hora(8, 0), hora(12, 49)), true);
+    expect(mismoTurnoMarcacion(hora(8, 0), hora(14, 30)), false);
+    expect(
+      mismoTurnoMarcacion(hora(8, 0), hora(8, 0).add(const Duration(days: 1))),
+      false,
+    );
   });
 }

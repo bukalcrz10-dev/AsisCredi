@@ -217,22 +217,8 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                       if (ancho >= 1100) {
                         return Row(
                           children: [
-                            const Expanded(
-                              child: _CampoFiltroAdmin(
-                                icono: Icons.calendar_today_outlined,
-                                texto: 'Fecha inicio',
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: _CampoFiltroAdmin(
-                                icono: Icons.event_outlined,
-                                texto: 'Fecha fin',
-                              ),
-                            ),
-                            const SizedBox(width: 12),
                             Expanded(
-                              flex: 2,
+                              flex: 3,
                               child: TextField(
                                 controller: _busquedaController,
                                 onChanged: (valor) {
@@ -241,7 +227,8 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                                   });
                                 },
                                 decoration: const InputDecoration(
-                                  hintText: 'Buscar trabajador o correo...',
+                                  labelText: 'Trabajador',
+                                  hintText: 'Buscar por nombre o correo...',
                                   prefixIcon: Icon(Icons.search),
                                 ),
                               ),
@@ -273,6 +260,20 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                               ),
                             ),
                             const SizedBox(width: 12),
+                            const Expanded(
+                              child: _CampoFiltroAdmin(
+                                icono: Icons.calendar_today_outlined,
+                                texto: 'Fecha inicio',
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: _CampoFiltroAdmin(
+                                icono: Icons.event_outlined,
+                                texto: 'Fecha fin',
+                              ),
+                            ),
+                            const SizedBox(width: 12),
                             IconButton(
                               tooltip: 'Actualizar asistencias',
                               onPressed: _recargarAsistencias,
@@ -291,20 +292,6 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           SizedBox(
-                            width: anchoFecha,
-                            child: const _CampoFiltroAdmin(
-                              icono: Icons.calendar_today_outlined,
-                              texto: 'Fecha inicio',
-                            ),
-                          ),
-                          SizedBox(
-                            width: anchoFecha,
-                            child: const _CampoFiltroAdmin(
-                              icono: Icons.event_outlined,
-                              texto: 'Fecha fin',
-                            ),
-                          ),
-                          SizedBox(
                             width: anchoBusqueda,
                             child: TextField(
                               controller: _busquedaController,
@@ -314,7 +301,8 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                                 });
                               },
                               decoration: const InputDecoration(
-                                hintText: 'Buscar trabajador o correo...',
+                                labelText: 'Trabajador',
+                                hintText: 'Buscar por nombre o correo...',
                                 prefixIcon: Icon(Icons.search),
                               ),
                             ),
@@ -342,6 +330,20 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                                   _estadoSeleccionado = valor;
                                 });
                               },
+                            ),
+                          ),
+                          SizedBox(
+                            width: anchoFecha,
+                            child: const _CampoFiltroAdmin(
+                              icono: Icons.calendar_today_outlined,
+                              texto: 'Fecha inicio',
+                            ),
+                          ),
+                          SizedBox(
+                            width: anchoFecha,
+                            child: const _CampoFiltroAdmin(
+                              icono: Icons.event_outlined,
+                              texto: 'Fecha fin',
                             ),
                           ),
                           IconButton(

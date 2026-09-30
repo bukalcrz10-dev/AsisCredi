@@ -36,14 +36,14 @@ class ControladorAsistencia extends ChangeNotifier {
     required this.usuarioIdAutenticado,
     this.nombreAutenticado,
     this.correoAutenticado,
-  })  : _obtenerAlertasPorUsuario = obtenerAlertasPorUsuario,
-        _registrarAlerta = registrarAlerta,
-        _registrarAsistencia = registrarAsistencia,
-        _obtenerAsistenciasPorUsuario = obtenerAsistenciasPorUsuario,
-        _obtenerPerfilTrabajadorActual = obtenerPerfilTrabajadorActual,
-        _subirEvidenciaFacial = subirEvidenciaFacial,
-        _validarRostroCapturado = validarRostroCapturado,
-        _validarUbicacionActual = validarUbicacionActual {
+  }) : _obtenerAlertasPorUsuario = obtenerAlertasPorUsuario,
+       _registrarAlerta = registrarAlerta,
+       _registrarAsistencia = registrarAsistencia,
+       _obtenerAsistenciasPorUsuario = obtenerAsistenciasPorUsuario,
+       _obtenerPerfilTrabajadorActual = obtenerPerfilTrabajadorActual,
+       _subirEvidenciaFacial = subirEvidenciaFacial,
+       _validarRostroCapturado = validarRostroCapturado,
+       _validarUbicacionActual = validarUbicacionActual {
     _iniciarReloj();
   }
 
@@ -137,8 +137,9 @@ class ControladorAsistencia extends ChangeNotifier {
   void actualizarRangoHistorial(DateTimeRange? rango) {
     _actualizarEstadoLocal(() {
       rangoHistorialSeleccionado = rango;
-      filtroHistorial =
-          rango == null ? FiltroHistorial.todo : FiltroHistorial.rango;
+      filtroHistorial = rango == null
+          ? FiltroHistorial.todo
+          : FiltroHistorial.rango;
     });
   }
 
@@ -332,8 +333,9 @@ class ControladorAsistencia extends ChangeNotifier {
     });
 
     try {
-      final historial =
-          await _obtenerAsistenciasPorUsuario.ejecutar(perfil.usuarioId);
+      final historial = await _obtenerAsistenciasPorUsuario.ejecutar(
+        perfil.usuarioId,
+      );
 
       _historialReciente
         ..clear()
@@ -358,7 +360,9 @@ class ControladorAsistencia extends ChangeNotifier {
     });
 
     try {
-      final alertas = await _obtenerAlertasPorUsuario.ejecutar(perfil.usuarioId);
+      final alertas = await _obtenerAlertasPorUsuario.ejecutar(
+        perfil.usuarioId,
+      );
       _alertasRecientes
         ..clear()
         ..addAll(alertas);
@@ -432,7 +436,8 @@ class ControladorAsistencia extends ChangeNotifier {
       if (resultadoFacial?.rostroDetectado != true) {
         await _registrarAlertaSistema(
           tipo: TipoAlerta.rostroNoValido,
-          mensaje: resultadoFacial?.mensajeEstado ??
+          mensaje:
+              resultadoFacial?.mensajeEstado ??
               'No se detecto un rostro valido antes de marcar asistencia.',
         );
       }
@@ -468,10 +473,7 @@ class ControladorAsistencia extends ChangeNotifier {
     required String mensaje,
   }) async {
     mensajeEstado = mensaje;
-    await _registrarAlertaSistema(
-      tipo: tipoAlerta,
-      mensaje: mensaje,
-    );
+    await _registrarAlertaSistema(tipo: tipoAlerta, mensaje: mensaje);
     _notificarCambio();
     return false;
   }
@@ -489,7 +491,9 @@ class ControladorAsistencia extends ChangeNotifier {
     return true;
   }
 
-  Future<bool> _validarUbicacionParaMarcacion(TipoMarcacion tipoMarcacion) async {
+  Future<bool> _validarUbicacionParaMarcacion(
+    TipoMarcacion tipoMarcacion,
+  ) async {
     if (resultadoUbicacion == null) {
       await validarUbicacion();
     }
@@ -524,10 +528,14 @@ class ControladorAsistencia extends ChangeNotifier {
     return true;
   }
 
-  Future<bool> _validarReglasDiariasMarcacion(TipoMarcacion tipoMarcacion) async {
+  Future<bool> _validarReglasDiariasMarcacion(
+    TipoMarcacion tipoMarcacion,
+    DateTime ahora,
+  ) async {
     final rechazo = obtenerRechazoReglaDiariaMarcacion(
-      marcacionesHoy: _marcacionesDelDia(DateTime.now()),
+      marcacionesHoy: _marcacionesDelDia(ahora),
       tipoMarcacion: tipoMarcacion,
+      ahora: ahora,
     );
     if (rechazo != null) {
       return _rechazarMarcacion(
@@ -590,17 +598,16 @@ class ControladorAsistencia extends ChangeNotifier {
     );
   }
 
-  Future<bool> registrarMarcacion(TipoMarcacion tipoMarcacion) async {
+  Future<bool> registrarMarcacion(
+    TipoMarcacion tipoMarcacion, {
+    DateTime? fechaProceso,
+  }) async {
+    if (guardando || cargandoPerfil || cargandoHistorial || validandoRostro) {
+      return false;
+    }
     final perfil = perfilActual;
     if (!_validarContextoBasicoMarcacion(perfil)) return false;
     final perfilSeguro = perfil!;
-
-    if (!await _validarUbicacionParaMarcacion(tipoMarcacion)) return false;
-    if (!await _validarRostroParaMarcacion(tipoMarcacion)) return false;
-    if (!await _validarReglasDiariasMarcacion(tipoMarcacion)) return false;
-
-    final rutaImagenFacial = resultadoFacial!.rutaImagenCapturada!;
-    final ahora = DateTime.now();
 
     _actualizarEstadoLocal(() {
       guardando = true;
@@ -608,6 +615,20 @@ class ControladorAsistencia extends ChangeNotifier {
     });
 
     try {
+      // La consulta al servidor detecta marcas previas de otros dispositivos.
+      await cargarHistorial();
+      if (!await _validarUbicacionParaMarcacion(tipoMarcacion)) return false;
+      if (!await _validarRostroParaMarcacion(tipoMarcacion)) return false;
+      final ahora = DateTime.now();
+      if (fechaProceso != null && !mismoTurnoMarcacion(fechaProceso, ahora)) {
+        mensajeEstado =
+            'Cambio el turno o la fecha. Cierra esta ventana y vuelve a iniciar la marcacion.';
+        return false;
+      }
+      if (!await _validarReglasDiariasMarcacion(tipoMarcacion, ahora)) {
+        return false;
+      }
+      final rutaImagenFacial = resultadoFacial!.rutaImagenCapturada!;
       String? urlEvidenciaFacial;
       String observacion =
           'Marcacion generada desde la pantalla del trabajador.';
@@ -649,14 +670,15 @@ class ControladorAsistencia extends ChangeNotifier {
 
       // Refrescamos el historial real despues de guardar para que la pantalla
       // refleje exactamente los datos persistidos en Firestore.
-      await Future.wait<void>([
-        cargarHistorial(),
-        cargarAlertas(),
-      ]);
+      try {
+        await Future.wait<void>([cargarHistorial(), cargarAlertas()]);
+      } catch (_) {
+        // El registro ya fue confirmado; una recarga no cambia ese resultado.
+      }
       return true;
     } catch (_) {
       mensajeEstado =
-          'No pudimos registrar la asistencia en Firebase. Intenta nuevamente en unos segundos.';
+          'No pudimos confirmar la asistencia. Revisa tu conexion y actualiza el historial antes de reintentar; la marca puede existir.';
       return false;
     } finally {
       _actualizarEstadoLocal(() {

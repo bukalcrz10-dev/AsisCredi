@@ -30,7 +30,7 @@ class _PaginaInicioState extends State<PaginaInicio>
     with WidgetsBindingObserver {
   late final ControladorAsistencia _controlador;
   late final RepositorioReconocimientoFacialImpl
-      _repositorioReconocimientoFacial;
+  _repositorioReconocimientoFacial;
   int _indice = 0;
 
   @override
@@ -172,6 +172,7 @@ class _PaginaInicioState extends State<PaginaInicio>
       builder: (_) => HojaProcesoMarcacion(
         controlador: _controlador,
         tipoMarcacion: tipoMarcacion,
+        fechaProceso: _controlador.fechaHoraActual,
         onValidarRostro: _abrirValidacionFacial,
       ),
     );

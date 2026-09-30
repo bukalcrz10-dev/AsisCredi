@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../dominio/entidades/tipo_marcacion.dart';
 import '../controladores/controlador_asistencia.dart';
+import '../controladores/controlador_asistencia_auxiliares.dart';
 import 'soporte_panel_trabajador.dart';
 
 class HojaProcesoMarcacion extends StatelessWidget {
@@ -11,24 +12,36 @@ class HojaProcesoMarcacion extends StatelessWidget {
     required this.controlador,
     required this.tipoMarcacion,
     required this.onValidarRostro,
+    required this.fechaProceso,
   });
 
   final ControladorAsistencia controlador;
   final TipoMarcacion tipoMarcacion;
+  final DateTime fechaProceso;
   final Future<void> Function() onValidarRostro;
 
   @override
   Widget build(BuildContext context) {
     final esEntrada = tipoMarcacion == TipoMarcacion.entrada;
     final color = esEntrada ? Colors.green : Colors.orange;
-    final titulo = esEntrada ? 'Registrar entrada' : 'Registrar salida';
+    final turno = fechaProceso.hour < 14 ? 'mañana' : 'tarde';
+    final titulo = 'Registrar ${tipoMarcacion.name} $turno';
 
     return AnimatedBuilder(
       animation: controlador,
       builder: (context, _) {
         final resultadoUbicacion = controlador.resultadoUbicacion;
         final gpsApagado = resultadoUbicacion?.servicioHabilitado == false;
-        final puedeConfirmar = controlador.tienePerfilCargado &&
+        final horarioDisponible =
+            mismoTurnoMarcacion(fechaProceso, controlador.fechaHoraActual) &&
+            controlador.resumenJornadaHoy.rechazoMarcacionPara(
+                  tipoMarcacion,
+                  controlador.fechaHoraActual,
+                ) ==
+                null;
+        final puedeConfirmar =
+            controlador.tienePerfilCargado &&
+            horarioDisponible &&
             !controlador.guardando &&
             !controlador.validandoUbicacion &&
             !controlador.validandoRostro &&
@@ -63,7 +76,9 @@ class HojaProcesoMarcacion extends StatelessWidget {
                               children: [
                                 Text(
                                   titulo,
-                                  style: Theme.of(context).textTheme.headlineSmall,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineSmall,
                                 ),
                                 Text(
                                   formatearFechaHoraPanel(
@@ -82,7 +97,8 @@ class HojaProcesoMarcacion extends StatelessWidget {
                       const SizedBox(height: 12),
                       EtiquetaPanelTrabajador(
                         titulo: 'Ubicacion',
-                        contenido: resultadoUbicacion?.mensajeEstado ??
+                        contenido:
+                            resultadoUbicacion?.mensajeEstado ??
                             'Todavia no se consulto la ubicacion.',
                         accion: SizedBox(
                           height: 52,
@@ -121,8 +137,9 @@ class HojaProcesoMarcacion extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       FilledButton.tonalIcon(
-                        onPressed:
-                            controlador.validandoRostro ? null : onValidarRostro,
+                        onPressed: controlador.validandoRostro
+                            ? null
+                            : onValidarRostro,
                         icon: const Icon(Icons.camera_alt_outlined),
                         label: const Text('Validar rostro'),
                       ),
@@ -135,7 +152,8 @@ class HojaProcesoMarcacion extends StatelessWidget {
                           icono: Icons.face_retouching_off_outlined,
                         )
                       else if (controlador.rostroValidado &&
-                          controlador.resultadoFacial?.rutaImagenCapturada != null)
+                          controlador.resultadoFacial?.rutaImagenCapturada !=
+                              null)
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(14),
@@ -167,26 +185,27 @@ class HojaProcesoMarcacion extends StatelessWidget {
                           icono: Icons.camera_alt_outlined,
                         ),
                       const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: puedeConfirmar
-                              ? () async {
-                                  final registroExitoso =
-                                      await controlador.registrarMarcacion(
-                                    tipoMarcacion,
-                                  );
-                                  if (context.mounted && registroExitoso) {
-                                    Navigator.of(context).pop();
+                      if (horarioDisponible)
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: puedeConfirmar
+                                ? () async {
+                                    final registroExitoso = await controlador
+                                        .registrarMarcacion(
+                                          tipoMarcacion,
+                                          fechaProceso: fechaProceso,
+                                        );
+                                    if (context.mounted && registroExitoso) {
+                                      Navigator.of(context).pop();
+                                    }
                                   }
-                                }
-                              : null,
-                          icon: Icon(esEntrada ? Icons.login : Icons.logout),
-                          label: Text(titulo),
+                                : null,
+                            icon: Icon(esEntrada ? Icons.login : Icons.logout),
+                            label: Text(titulo),
+                          ),
                         ),
-                      ),
                       if (controlador.mensajeEstado != null &&
-                          !puedeConfirmar &&
                           !mensajePerteneceABloquePanel(
                             controlador.mensajeEstado!,
                             'ubicacion',

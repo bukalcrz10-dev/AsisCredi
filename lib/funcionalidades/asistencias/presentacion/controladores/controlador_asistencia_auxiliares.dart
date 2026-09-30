@@ -9,6 +9,41 @@ enum FiltroHistorial { hoy, rango, todo }
 
 enum BloqueJornada { manana, tarde }
 
+class VentanaMarcacion {
+  const VentanaMarcacion(
+    this.bloque,
+    this.tipo,
+    this.inicioMinutos,
+    this.finMinutos,
+  );
+  final BloqueJornada bloque;
+  final TipoMarcacion tipo;
+  final int inicioMinutos;
+  final int finMinutos;
+
+  bool contiene(DateTime ahora) {
+    final minutos = ahora.hour * 60 + ahora.minute;
+    return minutos >= inicioMinutos && minutos < finMinutos;
+  }
+
+  String get etiqueta =>
+      'Registrar ${tipo.name} ${bloque == BloqueJornada.manana ? 'mañana' : 'tarde'}';
+}
+
+// El fin es exclusivo: 13:31 incluye todo el minuto 13:30.
+const ventanasMarcacion = [
+  VentanaMarcacion(BloqueJornada.manana, TipoMarcacion.entrada, 480, 770),
+  VentanaMarcacion(BloqueJornada.manana, TipoMarcacion.salida, 780, 811),
+  VentanaMarcacion(BloqueJornada.tarde, TipoMarcacion.entrada, 870, 1101),
+  VentanaMarcacion(BloqueJornada.tarde, TipoMarcacion.salida, 1110, 1171),
+];
+
+bool mismoTurnoMarcacion(DateTime inicio, DateTime actual) =>
+    inicio.year == actual.year &&
+    inicio.month == actual.month &&
+    inicio.day == actual.day &&
+    (inicio.hour < 14) == (actual.hour < 14);
+
 class TramoJornadaLaboral {
   const TramoJornadaLaboral({
     required this.bloque,
@@ -119,109 +154,86 @@ class ResumenJornadaTrabajador {
 
   DateTime get _ahora => DateTime.now();
 
+  TramoJornadaLaboral tramoPara(BloqueJornada bloque) =>
+      bloque == BloqueJornada.manana ? manana : tarde;
+
+  String? rechazoMarcacionPara(TipoMarcacion tipo, DateTime ahora) {
+    if (ahora.year != fecha.year ||
+        ahora.month != fecha.month ||
+        ahora.day != fecha.day) {
+      return 'La jornada cambio. Actualiza la pantalla antes de marcar.';
+    }
+    final candidatas = ventanasMarcacion.where(
+      (v) => v.tipo == tipo && v.contiene(ahora),
+    );
+    if (candidatas.isEmpty) {
+      return 'Fuera del horario permitido para registrar ${tipo.name}.';
+    }
+    final ventana = candidatas.first;
+    final tramo = tramoPara(ventana.bloque);
+    final existente = tipo == TipoMarcacion.entrada
+        ? tramo.entradaMarcada
+        : tramo.salidaMarcada;
+    if (existente != null) {
+      return 'Ya registraste esta ${tipo.name} del turno. No puedes repetirla hoy.';
+    }
+    if (tipo == TipoMarcacion.salida &&
+        (tramo.entradaMarcada == null ||
+            tramo.entradaMarcada!.fechaHora.isAfter(ahora))) {
+      return 'Primero debes registrar la entrada de este mismo turno.';
+    }
+    if (tipo == TipoMarcacion.entrada && tramo.salidaMarcada != null) {
+      return 'Este turno tiene una salida sin entrada. Solicita revision administrativa.';
+    }
+    return null;
+  }
+
+  VentanaMarcacion? siguienteVentanaPara(DateTime ahora) {
+    for (final ventana in ventanasMarcacion) {
+      if (ventana.contiene(ahora) &&
+          rechazoMarcacionPara(ventana.tipo, ahora) == null) {
+        return ventana;
+      }
+    }
+    return null;
+  }
+
+  TipoMarcacion? siguienteTipoMarcacionPara(DateTime ahora) =>
+      siguienteVentanaPara(ahora)?.tipo;
+  String? siguienteEtiquetaAccionPara(DateTime ahora) =>
+      siguienteVentanaPara(ahora)?.etiqueta;
+  TipoMarcacion? get siguienteTipoMarcacion =>
+      siguienteTipoMarcacionPara(_ahora);
+  String? get siguienteEtiquetaAccion => siguienteEtiquetaAccionPara(_ahora);
+  bool get siguienteAccionHabilitada => siguienteTipoMarcacion != null;
+
   DateTime? get proximaHoraHabilitada {
-    if (mensajeBloqueoJornada != null) {
-      return null;
+    for (final ventana in ventanasMarcacion) {
+      final tramo = tramoPara(ventana.bloque);
+      final pendiente = ventana.tipo == TipoMarcacion.entrada
+          ? tramo.entradaMarcada == null && tramo.salidaMarcada == null
+          : tramo.entradaMarcada != null && tramo.salidaMarcada == null;
+      if (pendiente) {
+        return DateTime(
+          fecha.year,
+          fecha.month,
+          fecha.day,
+          ventana.inicioMinutos ~/ 60,
+          ventana.inicioMinutos % 60,
+        );
+      }
     }
-
-    if (manana.entradaMarcada == null) {
-      return manana.entradaProgramada.subtract(const Duration(minutes: 30));
-    }
-
-    if (manana.salidaMarcada != null && tarde.entradaMarcada == null) {
-      return tarde.entradaProgramada.subtract(const Duration(minutes: 30));
-    }
-
-    if (tarde.entradaMarcada != null && tarde.salidaMarcada == null) {
-      return tarde.salidaProgramada.subtract(const Duration(minutes: 30));
-    }
-
-    if (manana.entradaMarcada != null && manana.salidaMarcada == null) {
-      return manana.salidaProgramada.subtract(const Duration(minutes: 10));
-    }
-
     return null;
   }
 
-  bool get siguienteAccionHabilitada {
-    final horaHabilitada = proximaHoraHabilitada;
-    if (horaHabilitada == null) {
-      return true;
-    }
+  String? get mensajeEsperaSiguienteAccion => siguienteAccionHabilitada
+      ? null
+      : 'No hay una marcacion disponible en este horario.';
 
-    return !_ahora.isBefore(horaHabilitada);
-  }
-
-  String? get mensajeEsperaSiguienteAccion {
-    if (mensajeBloqueoJornada != null) {
-      return null;
-    }
-
-    final horaHabilitada = proximaHoraHabilitada;
-    if (horaHabilitada == null || siguienteAccionHabilitada) {
-      return null;
-    }
-
-    if (manana.entradaMarcada == null) {
-      return 'La entrada de la manana se habilitara a las 8:00 AM.';
-    }
-
-    if (manana.salidaMarcada != null && tarde.entradaMarcada == null) {
-      return 'La entrada del segundo bloque se habilitara 30 minutos antes de las 3:00 PM.';
-    }
-
-    if (manana.entradaMarcada != null && manana.salidaMarcada == null) {
-      return 'La salida del primer bloque se habilitara 10 minutos antes de la 1:00 PM.';
-    }
-
-    if (tarde.entradaMarcada != null && tarde.salidaMarcada == null) {
-      return 'La salida del segundo bloque se habilitara 30 minutos antes de las 7:00 PM.';
-    }
-
-    return null;
-  }
-
-  String? get mensajeBloqueoJornada {
-    if (tarde.entradaMarcada != null &&
-        manana.entradaMarcada == null &&
-        tarde.salidaMarcada != null) {
-      return 'La jornada de hoy tiene una entrada de la tarde registrada antes de completar la entrada de la manana. Ya no se puede seguir marcando hasta revisar el orden.';
-    }
-
-    if (tarde.entradaMarcada != null &&
-        manana.salidaMarcada == null &&
-        tarde.salidaMarcada != null) {
-      return 'La jornada de hoy tiene la entrada de la tarde registrada, pero falta la salida de la manana. La secuencia debe revisarse antes de continuar.';
-    }
-
-    if (tarde.salidaMarcada != null && tarde.entradaMarcada == null) {
-      return 'La jornada de hoy tiene una salida de la tarde sin entrada previa del mismo bloque. La secuencia debe revisarse antes de continuar.';
-    }
-
-    return null;
-  }
-
-  TipoMarcacion? get siguienteTipoMarcacion {
-    if (mensajeBloqueoJornada != null || !siguienteAccionHabilitada) {
-      return null;
-    }
-    if (manana.entradaMarcada == null) return TipoMarcacion.entrada;
-    if (manana.salidaMarcada == null) return TipoMarcacion.salida;
-    if (tarde.entradaMarcada == null) return TipoMarcacion.entrada;
-    if (tarde.salidaMarcada == null) return TipoMarcacion.salida;
-    return null;
-  }
-
-  String? get siguienteEtiquetaAccion {
-    if (mensajeBloqueoJornada != null || !siguienteAccionHabilitada) {
-      return null;
-    }
-    if (manana.entradaMarcada == null) return 'Registrar entrada';
-    if (manana.salidaMarcada == null) return 'Registrar salida';
-    if (tarde.entradaMarcada == null) return 'Registrar entrada';
-    if (tarde.salidaMarcada == null) return 'Registrar salida';
-    return null;
-  }
+  String? get mensajeBloqueoJornada =>
+      tramos.any((t) => t.salidaMarcada != null && t.entradaMarcada == null)
+      ? 'Hay un turno con salida sin entrada. Solicita revision administrativa.'
+      : null;
 }
 
 const Duration _toleranciaInstitucional = Duration(minutes: 10);

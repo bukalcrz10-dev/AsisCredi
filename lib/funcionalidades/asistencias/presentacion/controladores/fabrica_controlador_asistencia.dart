@@ -40,39 +40,45 @@ DependenciasAsistencia crearDependenciasAsistencia({
   required User? usuarioAutenticado,
 }) {
   final fuenteDatosAsistencias = FuenteDatosAsistenciasFirestore();
-  final repositorioAsistencias =
-      RepositorioAsistenciasImpl(fuenteDatosAsistencias);
+  final repositorioAsistencias = RepositorioAsistenciasImpl(
+    fuenteDatosAsistencias,
+    marcacionUnicaPorBloque: true,
+  );
   final fuenteDatosUsuarios = FuenteDatosUsuariosFirestore();
   final repositorioUsuarios = RepositorioUsuariosImpl(fuenteDatosUsuarios);
   final fuenteDatosSedes = FuenteDatosSedesFirestore();
   final repositorioSedes = RepositorioSedesImpl(fuenteDatosSedes);
   final fuenteDatosGeolocalizacion = FuenteDatosGeolocalizacionDispositivo();
-  final repositorioGeolocalizacion =
-      RepositorioGeolocalizacionImpl(fuenteDatosGeolocalizacion);
+  final repositorioGeolocalizacion = RepositorioGeolocalizacionImpl(
+    fuenteDatosGeolocalizacion,
+  );
   final fuenteDatosAlertas = FuenteDatosAlertasFirestore();
   final repositorioAlertas = RepositorioAlertasImpl(fuenteDatosAlertas);
   final fuenteDatosEvidenciaFacial = FuenteDatosEvidenciaFacialStorage();
-  final repositorioEvidenciaFacial =
-      RepositorioEvidenciaFacialImpl(fuenteDatosEvidenciaFacial);
+  final repositorioEvidenciaFacial = RepositorioEvidenciaFacialImpl(
+    fuenteDatosEvidenciaFacial,
+  );
   final fuenteDatosRostro = FuenteDatosDetectorRostroMlkit();
-  final repositorioReconocimientoFacial =
-      RepositorioReconocimientoFacialImpl(fuenteDatosRostro);
+  final repositorioReconocimientoFacial = RepositorioReconocimientoFacialImpl(
+    fuenteDatosRostro,
+  );
 
   final controlador = ControladorAsistencia(
     obtenerAlertasPorUsuario: ObtenerAlertasPorUsuario(repositorioAlertas),
     registrarAlerta: RegistrarAlerta(repositorioAlertas),
     registrarAsistencia: RegistrarAsistencia(repositorioAsistencias),
-    obtenerAsistenciasPorUsuario:
-        ObtenerAsistenciasPorUsuario(repositorioAsistencias),
+    obtenerAsistenciasPorUsuario: ObtenerAsistenciasPorUsuario(
+      repositorioAsistencias,
+    ),
     obtenerPerfilTrabajadorActual: ObtenerPerfilTrabajadorActual(
       obtenerUsuarioPorId: ObtenerUsuarioPorId(repositorioUsuarios),
       obtenerSedePorId: ObtenerSedePorId(repositorioSedes),
     ),
     subirEvidenciaFacial: SubirEvidenciaFacial(repositorioEvidenciaFacial),
-    validarRostroCapturado:
-        ValidarRostroCapturado(repositorioReconocimientoFacial),
-    validarUbicacionActual:
-        ValidarUbicacionActual(repositorioGeolocalizacion),
+    validarRostroCapturado: ValidarRostroCapturado(
+      repositorioReconocimientoFacial,
+    ),
+    validarUbicacionActual: ValidarUbicacionActual(repositorioGeolocalizacion),
     usuarioIdAutenticado: usuarioAutenticado?.uid ?? '',
     nombreAutenticado: usuarioAutenticado?.displayName,
     correoAutenticado: usuarioAutenticado?.email,
