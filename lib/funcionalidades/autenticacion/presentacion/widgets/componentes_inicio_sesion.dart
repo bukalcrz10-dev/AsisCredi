@@ -90,14 +90,14 @@ class CabeceraUnachu extends StatelessWidget {
             ),
             child: ClipOval(
               child: Image.asset(
-                'assets/imagenes/logo_unachu.png',
+                'assets/imagenes/logo_crediasciende.png',
                 fit: BoxFit.contain,
               ),
             ),
           ),
           const SizedBox(height: 18),
           Text(
-            'UNACHU',
+            'CREDIASCIENDE',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   color: Colors.white,
@@ -211,7 +211,7 @@ class PieInicioSesion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      '(c) 2026 UNACHU - Sistema de Control de Asistencia',
+      '(c) 2026 CREDIASCIENDE - Sistema de Control de Asistencia',
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontSize: 13,

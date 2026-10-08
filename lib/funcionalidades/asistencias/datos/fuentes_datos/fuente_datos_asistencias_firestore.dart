@@ -28,6 +28,53 @@ class FuenteDatosAsistenciasFirestore {
         .set(datos);
   }
 
+  // Lee todos los documentos antes de escribir: todo se confirma o nada cambia.
+  Future<void> regularizarJornada({
+    required Map<String, Map<String, dynamic>> esperados,
+    required Map<String, Map<String, dynamic>> cambios,
+  }) async {
+    await _firestore.runTransaction((tx) async {
+      final referencias = {
+        for (final id in {...esperados.keys, ...cambios.keys})
+          id: _firestore.collection(ColeccionesFirebase.asistencias).doc(id),
+      };
+      for (final entry in referencias.entries) {
+        final actual = await tx.get(entry.value);
+        final esperado = esperados[entry.key];
+        if (esperado == null) {
+          if (actual.exists) {
+            throw StateError(
+              'Otra operación ya registró una marca. Actualiza la lista antes de reintentar.',
+            );
+          }
+        } else {
+          final datos = actual.data();
+          if (datos == null ||
+              [
+                'fechaHora',
+                'usuarioId',
+                'sedeId',
+                'tipoMarcacion',
+                'tipoHorario',
+                'bloqueJornada',
+                'observacion',
+              ].any((campo) => datos[campo] != esperado[campo])) {
+            throw StateError(
+              'La jornada cambió. Cierra el diálogo y actualiza la lista.',
+            );
+          }
+        }
+      }
+      for (final entry in cambios.entries) {
+        if (esperados.containsKey(entry.key)) {
+          tx.update(referencias[entry.key]!, entry.value);
+        } else {
+          tx.set(referencias[entry.key]!, entry.value);
+        }
+      }
+    });
+  }
+
   Future<void> eliminarAsistencia(String id) {
     return _firestore
         .collection(ColeccionesFirebase.asistencias)

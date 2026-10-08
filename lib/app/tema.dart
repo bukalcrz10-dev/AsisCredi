@@ -16,7 +16,7 @@ ThemeData temaAplicacion() {
     onPrimary: Colors.white,
     secondary: ColoresSistema.verdeInstitucional,
     onSecondary: Colors.white,
-    secondaryContainer: const Color(0xFFF6ECE9),
+    secondaryContainer: const Color(0xFFE3F2F3),
     onSecondaryContainer: ColoresSistema.rojoInstitucionalOscuro,
     tertiary: ColoresSistema.verdeExito,
     surfaceContainerHighest: ColoresSistema.fondoSuaveAlt,
@@ -43,7 +43,7 @@ ThemeData temaAplicacion() {
           titleMedium: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF332B28),
+            color: Color(0xFF29424B),
           ),
           bodyLarge: const TextStyle(
             fontSize: 14,
@@ -180,7 +180,7 @@ ThemeData temaAplicacion() {
         return IconThemeData(
           color: selected
               ? ColoresSistema.rojoInstitucional
-              : const Color(0xFF7F6D69),
+              : const Color(0xFF647E86),
         );
       }),
     ),

@@ -69,8 +69,10 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
       dias: dias,
     );
     setState(() => _exportando = true);
+    var etapa = 'generar';
     try {
       if (dia != null) {
+        etapa = 'abrir la vista de impresión del';
         await Printing.layoutPdf(
           name: informe.nombreArchivo,
           format: PdfPageFormat.a4.landscape,
@@ -83,6 +85,7 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
         final extension = excel ? 'xlsx' : 'pdf';
         final mime = excel ? MimeType.microsoftExcel : MimeType.pdf;
         final String? destino;
+        etapa = 'guardar';
         if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
           destino = await FileSaver.instance.saveFile(
             name: informe.nombreArchivo,
@@ -98,7 +101,7 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
             mimeType: mime,
           );
         }
-        if (mounted && destino != null) {
+        if (mounted && destino != null && destino.trim().isNotEmpty) {
           final ubicacionGuardada = destino;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -112,14 +115,26 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
                   : null,
             ),
           );
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Guardado cancelado. Vuelve a exportar y confirma Guardar en la carpeta elegida.'),
+            ),
+          );
         }
       }
-    } catch (_) {
+    } catch (error) {
+      final codigo = error is PlatformException ? error.code : error.runtimeType.toString();
+      debugPrint('Exportación de historial: etapa=$etapa; código=$codigo');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'No pudimos generar o guardar el informe. Intenta nuevamente.',
+              error is MissingPluginException
+                  ? 'El guardado no está disponible en esta instalación. Actualiza la app con el APK completo y vuelve a intentar.'
+                  : etapa == 'guardar'
+                  ? 'No se pudo confirmar el guardado ($codigo). Revisa la carpeta elegida antes de reintentar; el archivo podría existir.'
+                  : 'No pudimos $etapa informe ($codigo). Intenta nuevamente.',
             ),
           ),
         );
@@ -221,7 +236,7 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
                             ? null
                             : onBuscarRango,
                         style: FilledButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
+                          backgroundColor: ColoresPanel.azul,
                           padding: EdgeInsets.zero,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
@@ -267,10 +282,7 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
                   ),
                 )
               else
-                _TablaInformeAsistencias(
-                  resumenes: resumenes,
-                  onImprimir: _exportando ? null : (dia) => _exportar(dia: dia),
-                ),
+                _TablaInformeAsistencias(resumenes: resumenes),
             ],
           ),
         ),
@@ -280,32 +292,32 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
 }
 
 class _TablaInformeAsistencias extends StatelessWidget {
-  const _TablaInformeAsistencias({
-    required this.resumenes,
-    required this.onImprimir,
-  });
+  const _TablaInformeAsistencias({required this.resumenes});
 
   final List<ResumenDiaHistorial> resumenes;
-  final ValueChanged<ResumenDiaHistorial>? onImprimir;
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 530),
+        constraints: BoxConstraints(
+          minWidth: resumenes.every((dia) => dia.esJornadaContinua) ? 416 : 608,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _FilaCabeceraInforme(),
-            ...resumenes.map(
-              (resumen) => _FilaInformeAsistencia(
-                resumen: resumen,
-                onImprimir: onImprimir == null
-                    ? null
-                    : () => onImprimir!(resumen),
-              ),
-            ),
+            // Cada jornada conserva el horario con el que fue registrada.
+            // Si hubo cambio de cargo, repetimos la cabecera al cambiar de formato.
+            for (var i = 0; i < resumenes.length; i++) ...[
+              if (i == 0 ||
+                  resumenes[i].esJornadaContinua !=
+                      resumenes[i - 1].esJornadaContinua)
+                _FilaCabeceraInforme(
+                  esJornadaContinua: resumenes[i].esJornadaContinua,
+                ),
+              _FilaInformeAsistencia(resumen: resumenes[i]),
+            ],
           ],
         ),
       ),
@@ -314,23 +326,25 @@ class _TablaInformeAsistencias extends StatelessWidget {
 }
 
 class _FilaCabeceraInforme extends StatelessWidget {
-  const _FilaCabeceraInforme();
+  const _FilaCabeceraInforme({required this.esJornadaContinua});
+  final bool esJornadaContinua;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFE8EEF2),
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: const Row(
+      child: Row(
         children: [
-          _CeldaCabecera(texto: 'Fecha', ancho: 78),
-          _CeldaCabecera(texto: 'Bloque', ancho: 68),
-          _CeldaCabecera(texto: 'H. Entrada', ancho: 96),
-          _CeldaCabecera(texto: 'H. Salida', ancho: 96),
-          _CeldaCabecera(texto: 'Tardanza', ancho: 68),
-          _CeldaCabecera(texto: 'T. Laborado', ancho: 78),
-          _CeldaCabecera(texto: 'Descanso', ancho: 68),
-          _CeldaCabecera(texto: '', ancho: 46),
+          const _CeldaCabecera(texto: 'Fecha', ancho: 78),
+          const _CeldaCabecera(texto: 'Entrada mañana', ancho: 96),
+          if (!esJornadaContinua) ...[
+            const _CeldaCabecera(texto: 'Salida mañana', ancho: 96),
+            const _CeldaCabecera(texto: 'Entrada tarde', ancho: 96),
+          ],
+          const _CeldaCabecera(texto: 'Salida tarde', ancho: 96),
+          const _CeldaCabecera(texto: 'Tardanza', ancho: 68),
+          const _CeldaCabecera(texto: 'T. Laborado', ancho: 78),
         ],
       ),
     );
@@ -364,13 +378,9 @@ class _CeldaCabecera extends StatelessWidget {
 }
 
 class _FilaInformeAsistencia extends StatelessWidget {
-  const _FilaInformeAsistencia({
-    required this.resumen,
-    required this.onImprimir,
-  });
+  const _FilaInformeAsistencia({required this.resumen});
 
   final ResumenDiaHistorial resumen;
-  final VoidCallback? onImprimir;
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +392,6 @@ class _FilaInformeAsistencia extends StatelessWidget {
       child: Row(
         children: [
           _CeldaDato(texto: formatearFechaPanel(resumen.fecha), ancho: 78),
-          _CeldaDato(texto: _textoBloque(resumen), ancho: 68),
           _CeldaDatoConEstado(
             texto: resumen.entrada == null
                 ? '--:--'
@@ -390,13 +399,20 @@ class _FilaInformeAsistencia extends StatelessWidget {
             ancho: 96,
             completado: resumen.entrada != null,
           ),
-          _CeldaDatoConEstado(
-            texto: resumen.salida == null
-                ? '--:--'
-                : formatearHoraAmPmPanel(resumen.salida!.fechaHora),
-            ancho: 96,
-            completado: resumen.salida != null,
-          ),
+          for (final marca in [
+            if (!resumen.esJornadaContinua) ...[
+              resumen.salidaReceso,
+              resumen.entradaTarde,
+            ],
+            resumen.salidaFinal,
+          ])
+            _CeldaDatoConEstado(
+              texto: marca == null
+                  ? '--:--'
+                  : formatearHoraAmPmPanel(marca.fechaHora),
+              ancho: 96,
+              completado: marca != null,
+            ),
           _CeldaDato(
             texto: resumen.tardanza == null
                 ? '--:--'
@@ -409,38 +425,10 @@ class _FilaInformeAsistencia extends StatelessWidget {
                 : formatearDuracionPanel(resumen.tiempoLaborado!),
             ancho: 78,
           ),
-          _CeldaDato(
-            texto: resumen.descanso == null
-                ? '--:--'
-                : formatearDuracionPanel(resumen.descanso!),
-            ancho: 68,
-          ),
-          _CeldaAccionImprimir(ancho: 46, onPressed: onImprimir),
         ],
       ),
     );
   }
-}
-
-String _textoBloque(ResumenDiaHistorial resumen) {
-  final tieneManana =
-      resumen.entradaManana != null || resumen.salidaManana != null;
-  final tieneTarde =
-      resumen.entradaTarde != null || resumen.salidaTarde != null;
-
-  if (tieneManana && tieneTarde) {
-    return '1 y 2';
-  }
-
-  if (tieneTarde) {
-    return '2';
-  }
-
-  if (tieneManana) {
-    return '1';
-  }
-
-  return '--';
 }
 
 class _CeldaDato extends StatelessWidget {
@@ -513,37 +501,6 @@ class _CeldaDatoConEstado extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CeldaAccionImprimir extends StatelessWidget {
-  const _CeldaAccionImprimir({required this.ancho, required this.onPressed});
-
-  final double ancho;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: ancho,
-      child: Center(
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: ColoresSistema.fondoSuaveAlt,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: ColoresSistema.bordeCampo),
-          ),
-          child: IconButton(
-            tooltip: 'Imprimir este día',
-            padding: EdgeInsets.zero,
-            onPressed: onPressed,
-            icon: const Icon(Icons.print_outlined, size: 18),
-          ),
-        ),
       ),
     );
   }

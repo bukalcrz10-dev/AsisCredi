@@ -47,7 +47,7 @@ class LayoutAdmin extends StatelessWidget {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Color(0xFFF7F2EF),
+                      Color(0xFFF0F7F7),
                       ColoresSistema.fondoApp,
                     ],
                   ),

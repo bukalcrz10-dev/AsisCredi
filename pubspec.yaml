@@ -40,15 +40,8 @@ dependencies:
   # Autenticacion base del sistema para trabajadores y administradores.
   firebase_auth: ^5.7.0
 
-  # Llamadas a Cloud Functions desde el panel administrativo.
-  cloud_functions: ^5.5.0
-
-  # Cliente HTTP para endpoints administrativos con token Bearer.
+  # Cliente HTTP para utilidades de red.
   http: ^1.4.0
-
-  # Almacenamiento de evidencias como la foto facial capturada
-  # al momento de registrar una marcacion valida.
-  firebase_storage: ^12.4.10
 
   # Geolocalizacion del dispositivo para validar si el trabajador
   # esta dentro del radio permitido de su sede.
@@ -69,6 +62,7 @@ dependencies:
   pdf: ^3.12.0
   printing: ^5.14.3
   file_saver: ^0.4.0
+  shared_preferences: ^2.5.6
 
 dev_dependencies:
   flutter_test:

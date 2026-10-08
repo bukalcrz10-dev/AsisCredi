@@ -4,10 +4,7 @@ import '../../../../app/diseno_sistema.dart';
 import '../modelos/item_menu_admin.dart';
 
 class TopbarAdmin extends StatelessWidget {
-  const TopbarAdmin({
-    super.key,
-    required this.itemActual,
-  });
+  const TopbarAdmin({super.key, required this.itemActual});
 
   final ItemMenuAdmin itemActual;
 
@@ -37,17 +34,17 @@ class TopbarAdmin extends StatelessWidget {
                 Text(
                   itemActual.titulo,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: ColoresSistema.textoTitulo,
-                      ),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: ColoresSistema.textoTitulo,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   itemActual.descripcion,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.textoSecundario,
-                      ),
+                    color: ColoresSistema.textoSecundario,
+                  ),
                 ),
               ],
             ),
@@ -117,7 +114,7 @@ class _ItemFranjaTopbarAdmin extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icono, size: 18, color: ColoresSistema.rojoInstitucional),
+        Icon(icono, size: 18, color: ColoresPanel.turquesa),
         const SizedBox(width: 10),
         Column(
           mainAxisSize: MainAxisSize.min,
@@ -126,16 +123,16 @@ class _ItemFranjaTopbarAdmin extends StatelessWidget {
             Text(
               titulo,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: ColoresSistema.textoSuave,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: ColoresSistema.textoSuave,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
               valor,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
           ],
         ),

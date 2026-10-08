@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'acceso_perfil_activo.dart';
 import 'package:flutter/material.dart';
 
 import '../../datos/fuentes_datos/fuente_datos_autenticacion_firebase.dart';
@@ -20,6 +22,9 @@ class _CompuertaAutenticacionState extends State<CompuertaAutenticacion> {
   late final FuenteDatosAutenticacionFirebase _fuenteDatos;
   late final RepositorioAutenticacionImpl _repositorio;
   late final CerrarSesion _cerrarSesion;
+  late final Stream<bool> _sesiones;
+  String? _perfilUid;
+  Stream<EstadoPerfilActivo>? _perfil;
 
   @override
   void initState() {
@@ -27,18 +32,17 @@ class _CompuertaAutenticacionState extends State<CompuertaAutenticacion> {
     _fuenteDatos = FuenteDatosAutenticacionFirebase();
     _repositorio = RepositorioAutenticacionImpl(_fuenteDatos);
     _cerrarSesion = CerrarSesion(_repositorio);
+    _sesiones = _repositorio.sesionIniciada();
   }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<bool>(
-      stream: _repositorio.sesionIniciada(),
+      stream: _sesiones,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -49,12 +53,33 @@ class _CompuertaAutenticacionState extends State<CompuertaAutenticacion> {
             return const PaginaInicioSesion();
           }
 
-          return PaginaInicio(
-            usuarioAutenticado: usuarioAutenticado,
+          if (_perfilUid != usuarioAutenticado.uid) {
+            _perfilUid = usuarioAutenticado.uid;
+            _perfil = FirebaseFirestore.instance
+                .collection('usuarios')
+                .doc(usuarioAutenticado.uid)
+                .snapshots(includeMetadataChanges: true)
+                .map(
+                  (doc) => evaluarPerfilActivo(
+                    desdeCache: doc.metadata.isFromCache,
+                    existe: doc.exists,
+                    activo: doc.data()?['activo'] == true,
+                  ),
+                );
+          }
+          return AccesoPerfilActivo(
+            key: ValueKey(usuarioAutenticado.uid),
+            permisos: _perfil!,
             onCerrarSesion: _cerrarSesion.ejecutar,
+            child: PaginaInicio(
+              usuarioAutenticado: usuarioAutenticado,
+              onCerrarSesion: _cerrarSesion.ejecutar,
+            ),
           );
         }
 
+        _perfilUid = null;
+        _perfil = null;
         return const PaginaInicioSesion();
       },
     );

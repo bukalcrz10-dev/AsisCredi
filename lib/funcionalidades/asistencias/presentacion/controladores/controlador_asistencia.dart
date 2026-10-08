@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../autenticacion/presentacion/controladores/sesion_trabajador.dart';
 
 import '../../../alertas/dominio/casos_de_uso/obtener_alertas_por_usuario.dart';
 import '../../../alertas/dominio/casos_de_uso/registrar_alerta.dart';
 import '../../../alertas/dominio/entidades/alerta.dart';
 import '../../../alertas/dominio/entidades/tipo_alerta.dart';
-import '../../../reconocimiento_facial/dominio/casos_de_uso/subir_evidencia_facial.dart';
 import '../../../reconocimiento_facial/dominio/casos_de_uso/validar_rostro_capturado.dart';
 import '../../../reconocimiento_facial/dominio/entidades/resultado_validacion_facial.dart';
 import '../../dominio/casos_de_uso/obtener_asistencias_por_usuario.dart';
@@ -30,7 +30,6 @@ class ControladorAsistencia extends ChangeNotifier {
     required RegistrarAsistencia registrarAsistencia,
     required ObtenerAsistenciasPorUsuario obtenerAsistenciasPorUsuario,
     required ObtenerPerfilTrabajadorActual obtenerPerfilTrabajadorActual,
-    required SubirEvidenciaFacial subirEvidenciaFacial,
     required ValidarRostroCapturado validarRostroCapturado,
     required ValidarUbicacionActual validarUbicacionActual,
     required this.usuarioIdAutenticado,
@@ -41,7 +40,6 @@ class ControladorAsistencia extends ChangeNotifier {
        _registrarAsistencia = registrarAsistencia,
        _obtenerAsistenciasPorUsuario = obtenerAsistenciasPorUsuario,
        _obtenerPerfilTrabajadorActual = obtenerPerfilTrabajadorActual,
-       _subirEvidenciaFacial = subirEvidenciaFacial,
        _validarRostroCapturado = validarRostroCapturado,
        _validarUbicacionActual = validarUbicacionActual {
     _iniciarReloj();
@@ -52,7 +50,6 @@ class ControladorAsistencia extends ChangeNotifier {
   final RegistrarAsistencia _registrarAsistencia;
   final ObtenerAsistenciasPorUsuario _obtenerAsistenciasPorUsuario;
   final ObtenerPerfilTrabajadorActual _obtenerPerfilTrabajadorActual;
-  final SubirEvidenciaFacial _subirEvidenciaFacial;
   final ValidarRostroCapturado _validarRostroCapturado;
   final ValidarUbicacionActual _validarUbicacionActual;
   final String usuarioIdAutenticado;
@@ -64,6 +61,7 @@ class ControladorAsistencia extends ChangeNotifier {
   Timer? _temporizador;
   DateTime fechaHoraActual = DateTime.now();
   bool cargandoPerfil = false;
+  String? errorCargaPerfil;
   bool cargandoHistorial = false;
   bool cargandoAlertas = false;
   bool validandoUbicacion = false;
@@ -121,10 +119,14 @@ class ControladorAsistencia extends ChangeNotifier {
     );
   }
 
+  TipoHorarioPersonal? get horarioAsignado =>
+      horarioDesdeCargo(perfilActual?.cargo ?? '');
+
   ResumenJornadaTrabajador get resumenJornadaHoy {
     return construirResumenJornadaTrabajador(
       _marcacionesDelDia(DateTime.now()),
       DateTime.now(),
+      tipoHorario: horarioAsignado,
     );
   }
 
@@ -164,11 +166,13 @@ class ControladorAsistencia extends ChangeNotifier {
   }
 
   void _actualizarEstadoLocal(VoidCallback accion) {
+    if (_cerrado) return;
     accion();
     notifyListeners();
   }
 
   void _notificarCambio() {
+    if (_cerrado) return;
     notifyListeners();
   }
 
@@ -284,13 +288,16 @@ class ControladorAsistencia extends ChangeNotifier {
   // Si no existe el documento, deja un mensaje claro para que el administrador
   // complete la ficha del usuario dentro de la coleccion usuarios.
   Future<void> cargarPerfil() async {
+    if (_cerrado || cargandoPerfil) return;
     _actualizarEstadoLocal(() {
       cargandoPerfil = true;
+      errorCargaPerfil = null;
     });
 
     if (usuarioIdAutenticado.trim().isEmpty) {
       _actualizarEstadoLocal(() {
         perfilActual = null;
+        errorCargaPerfil = 'No se pudo identificar tu sesión. Vuelve a iniciar sesión.';
         cargandoPerfil = false;
       });
       return;
@@ -305,6 +312,8 @@ class ControladorAsistencia extends ChangeNotifier {
 
       if (perfil == null) {
         _asignarPerfilNoConfigurado();
+        errorCargaPerfil = 'No se encontró tu perfil de trabajador. Contacta al administrador.';
+        return;
       } else {
         perfilActual = perfil;
       }
@@ -314,6 +323,7 @@ class ControladorAsistencia extends ChangeNotifier {
       }
     } catch (_) {
       _asignarPerfilConErrorDeCarga();
+      errorCargaPerfil = 'No se pudo cargar tu información de asistencia. Revisa tu conexión y vuelve a intentar.';
     } finally {
       _actualizarEstadoLocal(() {
         cargandoPerfil = false;
@@ -536,6 +546,7 @@ class ControladorAsistencia extends ChangeNotifier {
       marcacionesHoy: _marcacionesDelDia(ahora),
       tipoMarcacion: tipoMarcacion,
       ahora: ahora,
+      tipoHorario: horarioAsignado,
     );
     if (rechazo != null) {
       return _rechazarMarcacion(
@@ -547,33 +558,21 @@ class ControladorAsistencia extends ChangeNotifier {
     return true;
   }
 
-  Future<String?> _subirEvidenciaFacialOpcional({
-    required PerfilTrabajadorActual perfil,
-    required String rutaImagenFacial,
-    required DateTime fechaHora,
-    required TipoMarcacion tipoMarcacion,
-  }) async {
-    return _subirEvidenciaFacial
-        .ejecutar(
-          usuarioId: perfil.usuarioId,
-          rutaImagenLocal: rutaImagenFacial,
-          fechaHora: fechaHora,
-          tipoMarcacion: tipoMarcacion,
-        )
-        .timeout(const Duration(seconds: 5));
-  }
-
   Asistencia _crearAsistenciaPendiente({
     required PerfilTrabajadorActual perfil,
     required TipoMarcacion tipoMarcacion,
     required DateTime fechaHora,
     required String observacion,
     required String? urlEvidenciaFacial,
+    required TipoHorarioPersonal horario,
+    required BloqueJornada bloque,
   }) {
     return crearAsistenciaTrabajador(
       perfil: perfil,
       tipoMarcacion: tipoMarcacion,
       fechaHora: fechaHora,
+      tipoHorario: horario.name,
+      bloqueJornada: bloque.name,
       ubicacion: resultadoUbicacion,
       dentroDeZona: dentroDeZona,
       rostroValidado: rostroValidado,
@@ -589,20 +588,32 @@ class ControladorAsistencia extends ChangeNotifier {
   String _mensajeRegistroExitoso({
     required TipoMarcacion tipoMarcacion,
     required DateTime fechaHora,
-    required bool evidenciaPendiente,
   }) {
     return construirMensajeRegistroExitoso(
       tipoMarcacion: tipoMarcacion,
       fechaHora: fechaHora,
-      evidenciaPendiente: evidenciaPendiente,
     );
   }
 
   Future<bool> registrarMarcacion(
     TipoMarcacion tipoMarcacion, {
     DateTime? fechaProceso,
+  }) => SesionTrabajador.instancia.protegerOperacion(
+    () => _registrarMarcacionProtegida(tipoMarcacion, fechaProceso: fechaProceso),
+  );
+
+  Future<bool> _registrarMarcacionProtegida(
+    TipoMarcacion tipoMarcacion, {
+    DateTime? fechaProceso,
   }) async {
     if (guardando || cargandoPerfil || cargandoHistorial || validandoRostro) {
+      return false;
+    }
+    if (horarioAsignado == null) {
+      _actualizarEstadoLocal(
+        () => mensajeEstado =
+            'Tu cargo no tiene horario asignado. Solicita revisión al administrador.',
+      );
       return false;
     }
     final perfil = perfilActual;
@@ -620,7 +631,13 @@ class ControladorAsistencia extends ChangeNotifier {
       if (!await _validarUbicacionParaMarcacion(tipoMarcacion)) return false;
       if (!await _validarRostroParaMarcacion(tipoMarcacion)) return false;
       final ahora = DateTime.now();
-      if (fechaProceso != null && !mismoTurnoMarcacion(fechaProceso, ahora)) {
+      if (fechaProceso != null &&
+          !mismoProcesoMarcacion(
+            fechaProceso,
+            ahora,
+            tipoMarcacion,
+            resumenJornadaHoy.tipoHorario,
+          )) {
         mensajeEstado =
             'Cambio el turno o la fecha. Cierra esta ventana y vuelve a iniciar la marcacion.';
         return false;
@@ -628,33 +645,18 @@ class ControladorAsistencia extends ChangeNotifier {
       if (!await _validarReglasDiariasMarcacion(tipoMarcacion, ahora)) {
         return false;
       }
-      final rutaImagenFacial = resultadoFacial!.rutaImagenCapturada!;
-      String? urlEvidenciaFacial;
-      String observacion =
-          'Marcacion generada desde la pantalla del trabajador.';
-
-      // La evidencia facial se sube antes de registrar la asistencia
-      // para que ambos queden enlazados desde el primer guardado.
-      // Si Storage aun no esta disponible, no bloqueamos la asistencia
-      // y dejamos una observacion explicita para retomarlo luego.
-      try {
-        urlEvidenciaFacial = await _subirEvidenciaFacialOpcional(
-          perfil: perfilSeguro,
-          rutaImagenFacial: rutaImagenFacial,
-          fechaHora: ahora,
-          tipoMarcacion: tipoMarcacion,
-        );
-      } catch (_) {
-        observacion =
-            'Marcacion generada desde la pantalla del trabajador. La evidencia facial no pudo subirse a Firebase Storage.';
-      }
-
+      final horarioRegistro = resumenJornadaHoy.tipoHorario;
+      final ventanaRegistro = ventanasPara(
+        horarioRegistro, fecha: ahora,
+      ).firstWhere((v) => v.tipo == tipoMarcacion && v.contiene(ahora));
       final asistencia = _crearAsistenciaPendiente(
+        horario: horarioRegistro,
+        bloque: ventanaRegistro.bloque,
         perfil: perfilSeguro,
         tipoMarcacion: tipoMarcacion,
         fechaHora: ahora,
-        observacion: observacion,
-        urlEvidenciaFacial: urlEvidenciaFacial,
+        observacion: 'Marcacion generada desde la pantalla del trabajador.',
+        urlEvidenciaFacial: null,
       );
 
       final idGenerado = await _registrarAsistencia.ejecutar(asistencia);
@@ -663,7 +665,6 @@ class ControladorAsistencia extends ChangeNotifier {
       mensajeEstado = _mensajeRegistroExitoso(
         tipoMarcacion: tipoMarcacion,
         fechaHora: asistencia.fechaHora,
-        evidenciaPendiente: urlEvidenciaFacial == null,
       );
       limpiarValidacionFacial();
       _notificarCambio();
@@ -689,7 +690,10 @@ class ControladorAsistencia extends ChangeNotifier {
 
   @override
   void dispose() {
+    _cerrado = true;
     _temporizador?.cancel();
     super.dispose();
   }
+
+  bool _cerrado = false;
 }

@@ -30,7 +30,7 @@ class Usuario {
   final String sedeAsignadaId;
 
   // Este campo deja lista la base para el registro facial del usuario.
-  // Mas adelante podria apuntar a una foto, plantilla o evidencia en Storage.
+  // Campo histórico de fotografía; no se suben fotografías en la versión actual.
   final String? urlFotoFacial;
   final bool activo;
 }

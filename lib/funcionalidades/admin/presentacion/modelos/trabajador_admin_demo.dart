@@ -9,6 +9,7 @@ class TrabajadorAdminDemo {
     required this.rol,
     required this.estadoActivo,
     required this.sede,
+    this.sedeId = '',
   });
 
   final String id;
@@ -20,6 +21,13 @@ class TrabajadorAdminDemo {
   final String rol;
   final bool estadoActivo;
   final String sede;
+  final String sedeId;
+
+  bool requiereActualizarAcceso(TrabajadorAdminDemo anterior) =>
+      id != anterior.id ||
+      correo.trim().toLowerCase() != anterior.correo.trim().toLowerCase() ||
+      rol.toLowerCase() != anterior.rol.toLowerCase() ||
+      estadoActivo != anterior.estadoActivo;
 
   TrabajadorAdminDemo copyWith({
     String? id,
@@ -31,6 +39,7 @@ class TrabajadorAdminDemo {
     String? rol,
     bool? estadoActivo,
     String? sede,
+    String? sedeId,
   }) {
     return TrabajadorAdminDemo(
       id: id ?? this.id,
@@ -42,6 +51,7 @@ class TrabajadorAdminDemo {
       rol: rol ?? this.rol,
       estadoActivo: estadoActivo ?? this.estadoActivo,
       sede: sede ?? this.sede,
+      sedeId: sedeId ?? this.sedeId,
     );
   }
 }

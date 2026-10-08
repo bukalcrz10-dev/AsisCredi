@@ -59,9 +59,9 @@ class ModuloPerfilTrabajador extends StatelessWidget {
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  Color(0x80BC2027),
-                                  Color(0x38BC2027),
-                                  Color(0x00FFFDFC),
+                                  Color(0x80075576),
+                                  Color(0x38075576),
+                                  Color(0x00FBFDFD),
                                 ],
                                 stops: [0.0, 0.42, 1.0],
                               ),
@@ -73,7 +73,7 @@ class ModuloPerfilTrabajador extends StatelessWidget {
                               width: 320,
                               height: 200,
                               decoration: BoxDecoration(
-                                color: const Color(0x14BC2027),
+                                color: const Color(0x14075576),
                                 shape: BoxShape.circle,
                               ),
                             ),
@@ -86,9 +86,9 @@ class ModuloPerfilTrabajador extends StatelessWidget {
                               decoration: const BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    ColoresSistema.rojoInstitucionalOscuro,
-                                    ColoresSistema.rojoInstitucionalMedio,
-                                    ColoresSistema.verdeInstitucional,
+                                    ColoresPanel.verde,
+                                    ColoresPanel.turquesa,
+                                    ColoresPanel.azul,
                                   ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
@@ -109,7 +109,7 @@ class ModuloPerfilTrabajador extends StatelessWidget {
                       child: Transform.scale(
                         scale: 1.12,
                         child: Image.asset(
-                          'assets/imagenes/logo_unachu.png',
+                          'assets/imagenes/logo_crediasciende.png',
                           fit: BoxFit.contain,
                         ),
                       ),
@@ -198,7 +198,7 @@ class ModuloPerfilTrabajador extends StatelessWidget {
                       icono: Icons.verified_user_outlined,
                       titulo: 'Estado de cuenta',
                       valor: 'Activa',
-                      colorIcono: ColoresSistema.verdeInstitucional,
+                      colorIcono: ColoresPanel.verde,
                     ),
                   ],
                 ),
@@ -238,7 +238,7 @@ class _FilaPerfilSimple extends StatelessWidget {
       width: double.infinity,
       padding: MedidasSistema.paddingBloque,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFCFA),
+        color: const Color(0xFFFAFDFD),
         borderRadius: BorderRadius.circular(MedidasSistema.radioBloque),
         border: Border.all(color: ColoresSistema.bordeSuave),
       ),

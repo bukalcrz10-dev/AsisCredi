@@ -7,8 +7,75 @@ import 'package:asistencia_app/funcionalidades/asistencias/dominio/entidades/tip
 import 'package:asistencia_app/funcionalidades/asistencias/presentacion/servicios/exportador_historial.dart';
 import 'package:asistencia_app/funcionalidades/asistencias/presentacion/widgets/resumen_historial_trabajador.dart';
 import 'horarios_marcacion_test.dart' show marca;
+import 'horarios_personal_test.dart' as personal;
+import 'package:asistencia_app/funcionalidades/asistencias/presentacion/controladores/controlador_asistencia_auxiliares.dart';
 
 void main() {
+  final asesor = agruparHistorialPorDia([
+    for (var i = 0; i < 2; i++)
+      personal.marca(
+        TipoHorarioPersonal.asesor,
+        ventanasPara(TipoHorarioPersonal.asesor)[i],
+        personal.h(i == 0 ? 8 : 18, 30),
+      ),
+  ]).single;
+  final plataforma = agruparHistorialPorDia([
+    for (var i = 0; i < 4; i++)
+      personal.marca(
+        TipoHorarioPersonal.plataforma,
+        ventanasPara(TipoHorarioPersonal.plataforma)[i],
+        personal.h([8, 13, 15, 18][i], i == 0 || i == 3 ? 30 : 0),
+      ),
+  ]).single;
+
+  test(
+    'Excel de asesor solo contiene entrada y salida, sin columnas de receso',
+    () {
+      final informe = InformeHistorial(trabajador: 'Ana', dias: [asesor]);
+      final hoja = Excel.decodeBytes(informe.generarExcel())['Asistencias'];
+      expect(hoja.rows[4].map((c) => c?.value.toString()).toList(), [
+        'Fecha',
+        'Entrada',
+        'Salida',
+        'Tardanza',
+        'T. laborado',
+        'Salida anticipada',
+        'Horario',
+      ]);
+      expect(hoja.rows[5][2]?.value.toString(), '06:30 PM');
+      expect(hoja.maxColumns, 7);
+    },
+  );
+
+  test(
+    'Informe mixto conserva orden y cambia cabeceras según cada jornada',
+    () async {
+      final informe = InformeHistorial(
+        trabajador: 'Ana',
+        dias: [asesor, plataforma, asesor],
+      );
+      expect(informe.secciones.map((s) => s.columnas.length), [7, 10, 7]);
+      final hoja = Excel.decodeBytes(informe.generarExcel())['Asistencias'];
+      expect(hoja.rows[4][2]?.value.toString(), 'Salida');
+      expect(hoja.rows[6][2]?.value.toString(), 'Salida mañana');
+      expect(hoja.rows[6][4]?.value.toString(), 'Salida tarde');
+      expect(hoja.rows[8][2]?.value.toString(), 'Salida');
+      expect(hoja.rows[9][2]?.value.toString(), '06:30 PM');
+      expect(
+        ascii.decode((await informe.generarPdf()).take(5).toList()),
+        '%PDF-',
+      );
+      expect(
+        ascii.decode(
+          (await InformeHistorial(
+            trabajador: 'Ana',
+            dias: [asesor],
+          ).generarPdf()).take(5).toList(),
+        ),
+        '%PDF-',
+      );
+    },
+  );
   final dias = agruparHistorialPorDia([
     marca(TipoMarcacion.entrada, 8, 30),
     marca(TipoMarcacion.salida, 13, 0),

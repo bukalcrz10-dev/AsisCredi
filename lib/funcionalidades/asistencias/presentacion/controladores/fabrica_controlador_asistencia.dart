@@ -8,10 +8,7 @@ import '../../../geolocalizacion/datos/fuentes_datos/fuente_datos_geolocalizacio
 import '../../../geolocalizacion/datos/repositorios/repositorio_geolocalizacion_impl.dart';
 import '../../../geolocalizacion/dominio/casos_de_uso/validar_ubicacion_actual.dart';
 import '../../../reconocimiento_facial/datos/fuentes_datos/fuente_datos_detector_rostro_mlkit.dart';
-import '../../../reconocimiento_facial/datos/fuentes_datos/fuente_datos_evidencia_facial_storage.dart';
-import '../../../reconocimiento_facial/datos/repositorios/repositorio_evidencia_facial_impl.dart';
 import '../../../reconocimiento_facial/datos/repositorios/repositorio_reconocimiento_facial_impl.dart';
-import '../../../reconocimiento_facial/dominio/casos_de_uso/subir_evidencia_facial.dart';
 import '../../../reconocimiento_facial/dominio/casos_de_uso/validar_rostro_capturado.dart';
 import '../../../sedes/datos/fuentes_datos/fuente_datos_sedes_firestore.dart';
 import '../../../sedes/datos/repositorios/repositorio_sedes_impl.dart';
@@ -54,10 +51,6 @@ DependenciasAsistencia crearDependenciasAsistencia({
   );
   final fuenteDatosAlertas = FuenteDatosAlertasFirestore();
   final repositorioAlertas = RepositorioAlertasImpl(fuenteDatosAlertas);
-  final fuenteDatosEvidenciaFacial = FuenteDatosEvidenciaFacialStorage();
-  final repositorioEvidenciaFacial = RepositorioEvidenciaFacialImpl(
-    fuenteDatosEvidenciaFacial,
-  );
   final fuenteDatosRostro = FuenteDatosDetectorRostroMlkit();
   final repositorioReconocimientoFacial = RepositorioReconocimientoFacialImpl(
     fuenteDatosRostro,
@@ -74,7 +67,6 @@ DependenciasAsistencia crearDependenciasAsistencia({
       obtenerUsuarioPorId: ObtenerUsuarioPorId(repositorioUsuarios),
       obtenerSedePorId: ObtenerSedePorId(repositorioSedes),
     ),
-    subirEvidenciaFacial: SubirEvidenciaFacial(repositorioEvidenciaFacial),
     validarRostroCapturado: ValidarRostroCapturado(
       repositorioReconocimientoFacial,
     ),

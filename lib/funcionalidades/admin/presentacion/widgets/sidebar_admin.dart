@@ -28,10 +28,7 @@ class SidebarAdmin extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            ColoresSistema.rojoInstitucionalOscuro,
-            ColoresSistema.rojoInstitucionalMedio,
-          ],
+          colors: [ColoresPanel.azul, ColoresPanel.turquesa],
         ),
       ),
       child: Padding(
@@ -94,21 +91,21 @@ class _MarcaAdmin extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'UNACHU',
+          'CREDIASCIENDE',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.6,
-              ),
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.6,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
           'Panel Administrativo',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.86),
-                fontWeight: FontWeight.w600,
-              ),
+            color: Colors.white.withValues(alpha: 0.86),
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
@@ -116,9 +113,7 @@ class _MarcaAdmin extends StatelessWidget {
 }
 
 class _TarjetaSesionAdmin extends StatelessWidget {
-  const _TarjetaSesionAdmin({
-    required this.usuarioAdministrador,
-  });
+  const _TarjetaSesionAdmin({required this.usuarioAdministrador});
 
   final Usuario? usuarioAdministrador;
 
@@ -143,9 +138,9 @@ class _TarjetaSesionAdmin extends StatelessWidget {
           Text(
             nombre,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -153,9 +148,9 @@ class _TarjetaSesionAdmin extends StatelessWidget {
           Text(
             correo,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.74),
-                  fontSize: 12,
-                ),
+              color: Colors.white.withValues(alpha: 0.74),
+              fontSize: 12,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -166,7 +161,7 @@ class _TarjetaSesionAdmin extends StatelessWidget {
                 width: 10,
                 height: 10,
                 decoration: const BoxDecoration(
-                  color: ColoresSistema.verdeExito,
+                  color: ColoresPanel.verde,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -174,8 +169,8 @@ class _TarjetaSesionAdmin extends StatelessWidget {
               Text(
                 'Sesion activa',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.84),
-                    ),
+                  color: Colors.white.withValues(alpha: 0.84),
+                ),
               ),
             ],
           ),
@@ -225,11 +220,7 @@ class _ItemSidebarAdmin extends StatelessWidget {
                     : Colors.white.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                item.icono,
-                color: Colors.white,
-                size: 18,
-              ),
+              child: Icon(item.icono, color: Colors.white, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -239,17 +230,17 @@ class _ItemSidebarAdmin extends StatelessWidget {
                   Text(
                     item.titulo,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     item.descripcion,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.76),
-                          fontSize: 11,
-                        ),
+                      color: Colors.white.withValues(alpha: 0.76),
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),

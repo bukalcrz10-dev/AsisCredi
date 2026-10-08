@@ -2,10 +2,7 @@ import '../../dominio/entidades/asistencia.dart';
 import '../controladores/controlador_asistencia_auxiliares.dart';
 
 class ResumenDiaHistorial {
-  const ResumenDiaHistorial({
-    required this.fecha,
-    required this.marcaciones,
-  });
+  const ResumenDiaHistorial({required this.fecha, required this.marcaciones});
 
   final DateTime fecha;
   final List<Asistencia> marcaciones;
@@ -17,6 +14,17 @@ class ResumenDiaHistorial {
   Asistencia? get entradaTarde => _resumenJornada.tarde.entradaMarcada;
 
   Asistencia? get salidaTarde => _resumenJornada.tarde.salidaMarcada;
+
+  bool get esAsesor => tipoHorario == TipoHorarioPersonal.asesor;
+  bool get esJornadaContinua => _resumenJornada.esJornadaContinua;
+  bool get esNoLaborable => _resumenJornada.esNoLaborable;
+  Asistencia? get salidaReceso => esJornadaContinua ? null : salidaManana;
+  Asistencia? get salidaFinal => esJornadaContinua ? salidaManana : salidaTarde;
+  String get etiquetaHorario => switch (tipoHorario) {
+    TipoHorarioPersonal.asesor => 'Asesor',
+    TipoHorarioPersonal.plataforma => 'Plataforma',
+    TipoHorarioPersonal.historico => 'Anterior',
+  };
 
   Asistencia? get entrada {
     return entradaManana;
@@ -38,14 +46,22 @@ class ResumenDiaHistorial {
     return _resumenJornada.descanso;
   }
 
-  bool get completo => _resumenJornada.totalBloquesCompletos == 2;
+  TipoHorarioPersonal get tipoHorario => _resumenJornada.tipoHorario;
+
+  Duration get salidaAnticipada => _resumenJornada.salidaAnticipadaTotal;
+
+  bool get completo =>
+      !esNoLaborable &&
+      _resumenJornada.totalBloquesCompletos == _resumenJornada.tramos.length;
 
   bool get observado {
     final tardanzaTotal = tardanza;
-    return tardanzaTotal != null && tardanzaTotal > Duration.zero;
+    return (tardanzaTotal != null && tardanzaTotal > Duration.zero) ||
+        salidaAnticipada > Duration.zero;
   }
 
   String get estadoTexto {
+    if (esNoLaborable) return 'No laborable';
     if (completo && !observado) return 'Completo';
     if (observado) return 'Observado';
     return 'Pendiente';

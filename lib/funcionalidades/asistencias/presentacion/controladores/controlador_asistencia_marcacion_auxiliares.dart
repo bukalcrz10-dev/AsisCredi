@@ -41,7 +41,15 @@ RechazoMarcacion? obtenerRechazoContextoBasicoMarcacion({
     );
   }
 
-  if (perfil.radioPermitidoMetros <= 0) {
+  if (!perfil.sede!.activa) {
+    return const RechazoMarcacion(
+      tipoAlerta: TipoAlerta.marcacionRechazada,
+      mensaje: 'Tu sede está inactiva. Solicita revisión al administrador.',
+    );
+  }
+
+  if (!perfil.radioPermitidoMetros.isFinite ||
+      perfil.radioPermitidoMetros <= 0) {
     return const RechazoMarcacion(
       tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
@@ -49,7 +57,11 @@ RechazoMarcacion? obtenerRechazoContextoBasicoMarcacion({
     );
   }
 
-  if (perfil.latitudSede == 0 && perfil.longitudSede == 0) {
+  if (!perfil.latitudSede.isFinite ||
+      !perfil.longitudSede.isFinite ||
+      perfil.latitudSede.abs() > 90 ||
+      perfil.longitudSede.abs() > 180 ||
+      (perfil.latitudSede == 0 && perfil.longitudSede == 0)) {
     return const RechazoMarcacion(
       tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
@@ -128,11 +140,13 @@ RechazoMarcacion? obtenerRechazoReglaDiariaMarcacion({
   required List<Asistencia> marcacionesHoy,
   required TipoMarcacion tipoMarcacion,
   DateTime? ahora,
+  TipoHorarioPersonal? tipoHorario,
 }) {
   final instante = ahora ?? DateTime.now();
   final resumen = construirResumenJornadaTrabajador(
     filtrarMarcacionesPorDia(marcacionesHoy, instante),
     instante,
+    tipoHorario: tipoHorario,
   );
   final mensaje = resumen.rechazoMarcacionPara(tipoMarcacion, instante);
   return mensaje == null
@@ -152,9 +166,13 @@ Asistencia crearAsistenciaTrabajador({
   required bool rostroValidado,
   required String observacion,
   required String? urlEvidenciaFacial,
+  String? tipoHorario,
+  String? bloqueJornada,
 }) {
   return Asistencia(
     id: '',
+    tipoHorario: tipoHorario,
+    bloqueJornada: bloqueJornada,
     usuarioId: perfil.usuarioId,
     nombreUsuario: perfil.nombreCompleto,
     sedeId: perfil.sedeId,
@@ -173,6 +191,8 @@ Asistencia crearAsistenciaTrabajador({
 Asistencia clonarAsistenciaConId(Asistencia asistencia, String idGenerado) {
   return Asistencia(
     id: idGenerado,
+    tipoHorario: asistencia.tipoHorario,
+    bloqueJornada: asistencia.bloqueJornada,
     usuarioId: asistencia.usuarioId,
     nombreUsuario: asistencia.nombreUsuario,
     sedeId: asistencia.sedeId,
@@ -192,12 +212,7 @@ Asistencia clonarAsistenciaConId(Asistencia asistencia, String idGenerado) {
 String construirMensajeRegistroExitoso({
   required TipoMarcacion tipoMarcacion,
   required DateTime fechaHora,
-  required bool evidenciaPendiente,
 }) {
   final horaFormateada = formatearHoraControlAsistencia(fechaHora);
-  if (evidenciaPendiente) {
-    return 'Tu ${tipoMarcacion.name} se registro correctamente a las $horaFormateada. La evidencia facial quedo pendiente porque Storage aun no esta disponible.';
-  }
-
   return 'Tu ${tipoMarcacion.name} se registro correctamente a las $horaFormateada.';
 }

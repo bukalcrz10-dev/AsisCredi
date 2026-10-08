@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:width="48dp" android:height="48dp" android:gravity="center">
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFF" />
+            <size android:width="48dp" android:height="48dp" />
+        </shape>
+    </item>
+    <item android:width="33dp" android:height="33dp" android:gravity="center">
+        <bitmap android:src="@drawable/logo_crediasciende"
+            android:gravity="fill" android:filter="true" />
+    </item>
+</layer-list>

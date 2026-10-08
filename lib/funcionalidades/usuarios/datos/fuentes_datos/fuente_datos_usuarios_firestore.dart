@@ -5,15 +5,16 @@ import '../../../../nucleo/constantes/colecciones_firebase.dart';
 // Fuente de datos de usuarios en Firestore.
 // Esta capa solo se ocupa de leer el documento del perfil desde la coleccion usuarios.
 class FuenteDatosUsuariosFirestore {
-  FuenteDatosUsuariosFirestore({
-    FirebaseFirestore? firestore,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance;
+  FuenteDatosUsuariosFirestore({FirebaseFirestore? firestore})
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
   Future<Map<String, dynamic>?> obtenerUsuarioPorId(String id) async {
-    final documento =
-        await _firestore.collection(ColeccionesFirebase.usuarios).doc(id).get();
+    final documento = await _firestore
+        .collection(ColeccionesFirebase.usuarios)
+        .doc(id)
+        .get();
 
     return documento.data();
   }
@@ -33,6 +34,34 @@ class FuenteDatosUsuariosFirestore {
     required String id,
     required Map<String, dynamic> datos,
   }) {
-    return _firestore.collection(ColeccionesFirebase.usuarios).doc(id).set(datos);
+    return _firestore
+        .collection(ColeccionesFirebase.usuarios)
+        .doc(id)
+        .set(datos);
+  }
+
+  // Actualiza únicamente el perfil, sin reemplazar fotografía, permisos o sede.
+  Future<void> actualizarDatosLaborales({
+    required String id,
+    required String nombreCompleto,
+    required String telefono,
+    required String area,
+    required String cargo,
+    String? sedeAsignadaId,
+  }) {
+    final datos = <String, dynamic>{
+      'nombreCompleto': nombreCompleto,
+      'telefono': telefono,
+      'area': area,
+      'cargo': cargo,
+    };
+
+    if (sedeAsignadaId != null) {
+      datos['sedeAsignadaId'] = sedeAsignadaId;
+    }
+
+    return _firestore.collection(ColeccionesFirebase.usuarios).doc(id).update(
+      datos,
+    );
   }
 }

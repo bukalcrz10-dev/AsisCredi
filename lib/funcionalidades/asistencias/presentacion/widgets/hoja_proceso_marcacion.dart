@@ -24,8 +24,13 @@ class HojaProcesoMarcacion extends StatelessWidget {
   Widget build(BuildContext context) {
     final esEntrada = tipoMarcacion == TipoMarcacion.entrada;
     final color = esEntrada ? Colors.green : Colors.orange;
-    final turno = fechaProceso.hour < 14 ? 'mañana' : 'tarde';
-    final titulo = 'Registrar ${tipoMarcacion.name} $turno';
+    final horario = controlador.resumenJornadaHoy;
+    final opciones = horario.ventanas.where(
+      (v) => v.tipo == tipoMarcacion && v.contiene(fechaProceso),
+    );
+    final titulo = opciones.isEmpty
+        ? 'Registrar asistencia'
+        : opciones.first.etiqueta;
 
     return AnimatedBuilder(
       animation: controlador,
@@ -33,7 +38,13 @@ class HojaProcesoMarcacion extends StatelessWidget {
         final resultadoUbicacion = controlador.resultadoUbicacion;
         final gpsApagado = resultadoUbicacion?.servicioHabilitado == false;
         final horarioDisponible =
-            mismoTurnoMarcacion(fechaProceso, controlador.fechaHoraActual) &&
+            controlador.horarioAsignado != null &&
+            mismoProcesoMarcacion(
+              fechaProceso,
+              controlador.fechaHoraActual,
+              tipoMarcacion,
+              horario.tipoHorario,
+            ) &&
             controlador.resumenJornadaHoy.rechazoMarcacionPara(
                   tipoMarcacion,
                   controlador.fechaHoraActual,
@@ -202,7 +213,7 @@ class HojaProcesoMarcacion extends StatelessWidget {
                                   }
                                 : null,
                             icon: Icon(esEntrada ? Icons.login : Icons.logout),
-                            label: Text(titulo),
+                            label: const Text('Registrarse'),
                           ),
                         ),
                       if (controlador.mensajeEstado != null &&

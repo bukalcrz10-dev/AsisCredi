@@ -11,8 +11,8 @@ class ObtenerPerfilTrabajadorActual {
   const ObtenerPerfilTrabajadorActual({
     required ObtenerUsuarioPorId obtenerUsuarioPorId,
     required ObtenerSedePorId obtenerSedePorId,
-  })  : _obtenerUsuarioPorId = obtenerUsuarioPorId,
-        _obtenerSedePorId = obtenerSedePorId;
+  }) : _obtenerUsuarioPorId = obtenerUsuarioPorId,
+       _obtenerSedePorId = obtenerSedePorId;
 
   final ObtenerUsuarioPorId _obtenerUsuarioPorId;
   final ObtenerSedePorId _obtenerSedePorId;
@@ -44,10 +44,11 @@ class ObtenerPerfilTrabajadorActual {
           ? usuario.cargo.trim()
           : _rolATexto(usuario),
       telefono: usuario.telefono.trim(),
-      sedeId: sedeIdNormalizado,
+      sedeId: sede?.id ?? sedeIdNormalizado,
       nombreSede: sede?.nombre ?? 'Sede no encontrada',
-      correoNotificacion:
-          usuario.correo.isNotEmpty ? usuario.correo : (correoFallback ?? ''),
+      correoNotificacion: usuario.correo.isNotEmpty
+          ? usuario.correo
+          : (correoFallback ?? ''),
       latitudSede: sede?.latitud ?? 0,
       longitudSede: sede?.longitud ?? 0,
       radioPermitidoMetros: sede?.radioPermitidoMetros ?? 0,
@@ -59,6 +60,7 @@ class ObtenerPerfilTrabajadorActual {
   Future<Sede?> _obtenerSedeConCompatibilidad(String sedeIdOriginal) async {
     final sedeIdNormalizado = _normalizarSedeId(sedeIdOriginal);
 
+    if (sedeIdNormalizado.isEmpty) return null;
     final sedePrincipal = await _obtenerSedePorId.ejecutar(sedeIdNormalizado);
     if (sedePrincipal != null) {
       return sedePrincipal;

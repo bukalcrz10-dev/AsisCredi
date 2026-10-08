@@ -16,16 +16,35 @@ class InformeHistorial {
 
   final String trabajador;
   final List<ResumenDiaHistorial> dias;
-  static const columnas = [
+  bool get jornadaContinua =>
+      dias.isNotEmpty && dias.every((d) => d.esJornadaContinua);
+  List<String> get columnas => [
     'Fecha',
-    'Entrada mañana',
-    'Salida mañana',
-    'Entrada tarde',
-    'Salida tarde',
+    'Entrada',
+    if (!jornadaContinua) 'Salida mañana',
+    if (!jornadaContinua) 'Entrada tarde',
+    jornadaContinua ? 'Salida' : 'Salida tarde',
     'Tardanza',
     'T. laborado',
-    'Descanso',
+    if (!jornadaContinua) 'Descanso',
+    'Salida anticipada',
+    'Horario',
   ];
+
+  // Conserva el orden del historial y separa las jornadas con dos y cuatro marcas.
+  List<InformeHistorial> get secciones {
+    final grupos = <List<ResumenDiaHistorial>>[];
+    for (final dia in dias) {
+      if (grupos.isEmpty ||
+          grupos.last.last.esJornadaContinua != dia.esJornadaContinua) {
+        grupos.add([]);
+      }
+      grupos.last.add(dia);
+    }
+    return grupos
+        .map((grupo) => InformeHistorial(trabajador: trabajador, dias: grupo))
+        .toList();
+  }
 
   String get periodo {
     if (dias.isEmpty) return 'Sin registros';
@@ -49,12 +68,14 @@ class InformeHistorial {
     return [
       formatearFechaPanel(dia.fecha),
       hora(dia.entradaManana?.fechaHora),
-      hora(dia.salidaManana?.fechaHora),
-      hora(dia.entradaTarde?.fechaHora),
-      hora(dia.salidaTarde?.fechaHora),
+      if (!jornadaContinua) hora(dia.salidaReceso?.fechaHora),
+      if (!jornadaContinua) hora(dia.entradaTarde?.fechaHora),
+      hora(dia.salidaFinal?.fechaHora),
       duracion(dia.tardanza),
       duracion(dia.tiempoLaborado),
-      duracion(dia.descanso),
+      if (!jornadaContinua) duracion(dia.descanso),
+      duracion(dia.salidaAnticipada),
+      dia.etiquetaHorario,
     ];
   }).toList();
 
@@ -69,18 +90,26 @@ class InformeHistorial {
     agregar(['Trabajador', trabajador]);
     agregar(['Fechas con registros', periodo]);
     agregar(['Días registrados', dias.length.toString()]);
-    agregar(columnas);
-    for (final fila in filas) {
-      agregar(fila);
-    }
-    for (var columna = 0; columna < columnas.length; columna++) {
-      hoja.setColumnWidth(columna, 21);
-      hoja
-          .cell(CellIndex.indexByColumnRow(columnIndex: columna, rowIndex: 4))
-          .cellStyle = CellStyle(
-        bold: true,
-        backgroundColorHex: ExcelColor.fromHexString('#DCE8F2'),
-      );
+    for (final seccion in secciones) {
+      final filaCabecera = hoja.maxRows;
+      agregar(seccion.columnas);
+      for (final fila in seccion.filas) {
+        agregar(fila);
+      }
+      for (var columna = 0; columna < seccion.columnas.length; columna++) {
+        hoja.setColumnWidth(columna, 21);
+        hoja
+            .cell(
+              CellIndex.indexByColumnRow(
+                columnIndex: columna,
+                rowIndex: filaCabecera,
+              ),
+            )
+            .cellStyle = CellStyle(
+          bold: true,
+          backgroundColorHex: ExcelColor.fromHexString('#DCE8F2'),
+        );
+      }
     }
     return Uint8List.fromList(libro.encode()!);
   }
@@ -121,23 +150,25 @@ class InformeHistorial {
           ),
         ),
         build: (_) => [
-          pw.TableHelper.fromTextArray(
-            headers: columnas,
-            data: filas,
-            headerStyle: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
+          for (final seccion in secciones) ...[
+            pw.TableHelper.fromTextArray(
+              headers: seccion.columnas,
+              data: seccion.filas,
+              headerStyle: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.blueGrey100,
+              ),
+              cellAlignment: pw.Alignment.center,
+              cellPadding: const pw.EdgeInsets.all(6),
             ),
-            cellStyle: const pw.TextStyle(fontSize: 9),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColors.blueGrey100,
-            ),
-            cellAlignment: pw.Alignment.center,
-            cellPadding: const pw.EdgeInsets.all(6),
-          ),
-          pw.SizedBox(height: 10),
+            pw.SizedBox(height: 10),
+          ],
           pw.Text(
-            'Días registrados: ${dias.length}. --:-- indica un dato pendiente.',
+            'Días registrados: ${dias.length}. --:-- indica un dato no disponible.',
             style: const pw.TextStyle(fontSize: 9),
           ),
         ],

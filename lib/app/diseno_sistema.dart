@@ -1,31 +1,39 @@
 import 'package:flutter/material.dart';
 
 class ColoresSistema {
-  static const rojoInstitucional = Color(0xFFBC2027);
-  static const rojoInstitucionalOscuro = Color(0xFF8E131A);
-  static const rojoInstitucionalMedio = Color(0xFFB12025);
-  static const verdeInstitucional = Color(0xFF184E2F);
-  static const verdeExito = Color(0xFF4EB267);
+  static const rojoInstitucional = Color(0xFF007F91);
+  static const rojoInstitucionalOscuro = Color(0xFF075576);
+  static const rojoInstitucionalMedio = Color(0xFF0097A7);
+  static const verdeInstitucional = Color(0xFF008D50);
+  static const verdeExito = Color(0xFF36B66A);
 
-  static const fondoApp = Color(0xFFF6F4F2);
+  static const fondoApp = Color(0xFFF3F7F7);
   static const fondoTarjeta = Colors.white;
-  static const fondoSuave = Color(0xFFFDFCFB);
-  static const fondoSuaveAlt = Color(0xFFF4EEEB);
-  static const fondoChip = Color(0xFFF3EFED);
+  static const fondoSuave = Color(0xFFFBFDFD);
+  static const fondoSuaveAlt = Color(0xFFEAF3F4);
+  static const fondoChip = Color(0xFFEDF4F4);
 
-  static const textoFuerte = Color(0xFF2B2321);
-  static const textoTitulo = Color(0xFF221C1A);
-  static const textoBase = Color(0xFF4B423F);
-  static const textoSecundario = Color(0xFF6A605C);
-  static const textoSuave = Color(0xFF9A8E89);
-  static const iconoBase = Color(0xFF6A605C);
-  static const iconoSuave = Color(0xFF5D4B47);
+  static const textoFuerte = Color(0xFF203238);
+  static const textoTitulo = Color(0xFF182D35);
+  static const textoBase = Color(0xFF40555C);
+  static const textoSecundario = Color(0xFF5B7178);
+  static const textoSuave = Color(0xFF71878D);
+  static const iconoBase = Color(0xFF5B7178);
+  static const iconoSuave = Color(0xFF49666F);
 
-  static const bordeSuave = Color(0xFFE8DEDA);
-  static const bordeIntermedio = Color(0xFFE3D6D2);
-  static const bordeCampo = Color(0xFFD8CCC8);
-  static const bordeChip = Color(0xFFD9C6C3);
-  static const divisor = Color(0xFFE0D5D1);
+  static const bordeSuave = Color(0xFFDBE8EA);
+  static const bordeIntermedio = Color(0xFFD2E3E6);
+  static const bordeCampo = Color(0xFFC6DADC);
+  static const bordeChip = Color(0xFFBFD8DC);
+  static const divisor = Color(0xFFD4E3E6);
+}
+
+// Acentos del panel del trabajador; el acceso conserva su paleta actual.
+class ColoresPanel {
+  static const azul = Color(0xFF075B83);
+  static const turquesa = Color(0xFF00AFC1);
+  static const verde = Color(0xFF008D50);
+  static const fondo = Color(0xFFF3F8FA);
 }
 
 class MedidasSistema {

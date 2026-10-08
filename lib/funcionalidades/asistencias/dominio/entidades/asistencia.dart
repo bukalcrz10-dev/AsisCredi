@@ -19,7 +19,13 @@ class Asistencia {
     this.correoNotificacion,
     this.urlEvidenciaFacial,
     this.notificacionEnviada = false,
+    this.tipoHorario,
+    this.bloqueJornada,
   });
+
+  // Se conserva el horario y bloque originales para el historial.
+  final String? tipoHorario;
+  final String? bloqueJornada;
 
   final String id;
   final String usuarioId;
@@ -39,7 +45,7 @@ class Asistencia {
   // Este campo prepara la integracion futura con el envio de correos
   // que mencionaste para informar al administrador cada nueva marcacion.
   final String? correoNotificacion;
-  // URL de la evidencia facial almacenada en Firebase Storage.
+  // URL histórica: se conserva para leer registros anteriores. Las nuevas marcas no suben fotos.
   // Queda asociada a la asistencia para auditoria o panel administrativo.
   final String? urlEvidenciaFacial;
   final bool notificacionEnviada;

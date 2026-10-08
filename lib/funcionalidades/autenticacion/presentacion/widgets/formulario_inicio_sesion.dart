@@ -103,7 +103,17 @@ class FormularioInicioSesion extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 18),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              visualDensity: const VisualDensity(vertical: -2),
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Mantener mi sesión iniciada'),
+              value: controlador.mantenerSesion,
+              onChanged: controlador.cargando ? null : (valor) =>
+                  controlador.cambiarMantenerSesion(valor ?? false),
+            ),
+            const SizedBox(height: 4),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(

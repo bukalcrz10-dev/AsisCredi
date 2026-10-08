@@ -105,7 +105,7 @@ class _PaginaInicioSesionAdminState extends State<PaginaInicioSesionAdmin> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Acceso exclusivo para administradores institucionales de UNACHU.',
+                        'Acceso exclusivo para administradores institucionales de CREDIASCIENDE.',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: ColoresSistema.textoSecundario,
                               height: 1.5,

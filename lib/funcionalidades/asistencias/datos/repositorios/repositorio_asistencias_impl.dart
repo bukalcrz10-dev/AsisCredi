@@ -28,6 +28,8 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
 
     final asistenciaConId = Asistencia(
       id: idFinal,
+      tipoHorario: asistencia.tipoHorario,
+      bloqueJornada: asistencia.bloqueJornada,
       usuarioId: asistencia.usuarioId,
       nombreUsuario: asistencia.nombreUsuario,
       sedeId: asistencia.sedeId,
@@ -93,6 +95,33 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
     return asistencias;
   }
 
+  Future<void> regularizarJornada({
+    required List<Asistencia> originales,
+    required List<Asistencia> actualizadas,
+  }) async {
+    if (actualizadas.isEmpty) return;
+    final esperados = {
+      for (final a in originales)
+        a.id: ModeloAsistencia.desdeEntidad(a).aMapa(),
+    };
+    final cambios = <String, Map<String, dynamic>>{};
+    for (final a in actualizadas) {
+      final id = a.id.isEmpty ? idMarcacionPorBloque(a) : a.id;
+      cambios[id] = a.id.isEmpty
+          ? ModeloAsistencia.desdeEntidad(a).aMapa()
+          : {
+              'fechaHora': ModeloAsistencia.desdeEntidad(
+                a,
+              ).aMapa()['fechaHora'],
+              'observacion': a.observacion,
+            };
+    }
+    await _fuenteDatos.regularizarJornada(
+      esperados: esperados,
+      cambios: cambios,
+    );
+  }
+
   @override
   Future<void> eliminarAsistencia(String id) {
     return _fuenteDatos.eliminarAsistencia(id);
@@ -106,7 +135,8 @@ String idMarcacionPorBloque(Asistencia asistencia) {
   final dia =
       '${fecha.year}${fecha.month.toString().padLeft(2, '0')}${fecha.day.toString().padLeft(2, '0')}';
   final limite = asistencia.tipoMarcacion.name == 'entrada' ? 13 : 14;
-  final bloque = fecha.hour < limite ? 'manana' : 'tarde';
+  final bloque =
+      asistencia.bloqueJornada ?? (fecha.hour < limite ? 'manana' : 'tarde');
   final usuario = base64Url.encode(utf8.encode(asistencia.usuarioId));
   return 'marcacion_${usuario}_${dia}_${bloque}_${asistencia.tipoMarcacion.name}';
 }

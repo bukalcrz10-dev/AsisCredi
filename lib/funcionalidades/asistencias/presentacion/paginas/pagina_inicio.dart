@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../../../app/diseno_sistema.dart';
 
 import '../../../reconocimiento_facial/datos/repositorios/repositorio_reconocimiento_facial_impl.dart';
 import '../../../reconocimiento_facial/presentacion/paginas/pagina_validacion_facial.dart';
@@ -17,10 +18,16 @@ import '../widgets/soporte_panel_trabajador.dart';
 // La logica principal sigue en el controlador, pero la UI se separa
 // para evitar una vista unica demasiado larga y dificil de recorrer.
 class PaginaInicio extends StatefulWidget {
-  const PaginaInicio({super.key, this.usuarioAutenticado, this.onCerrarSesion});
+  const PaginaInicio({
+    super.key,
+    this.usuarioAutenticado,
+    this.onCerrarSesion,
+    this.crearDependencias,
+  });
 
   final User? usuarioAutenticado;
   final Future<void> Function()? onCerrarSesion;
+  final DependenciasAsistencia Function()? crearDependencias;
 
   @override
   State<PaginaInicio> createState() => _PaginaInicioState();
@@ -37,16 +44,17 @@ class _PaginaInicioState extends State<PaginaInicio>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    final dependencias = crearDependenciasAsistencia(
-      usuarioAutenticado: widget.usuarioAutenticado,
-    );
+    final dependencias =
+        widget.crearDependencias?.call() ??
+        crearDependenciasAsistencia(
+          usuarioAutenticado: widget.usuarioAutenticado,
+        );
     _controlador = dependencias.controlador;
     _repositorioReconocimientoFacial =
         dependencias.repositorioReconocimientoFacial;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _controlador.cargarPerfil();
-    });
+    // Iniciar antes del primer frame evita mostrar un perfil vacio transitorio.
+    _controlador.cargarPerfil();
   }
 
   @override
@@ -244,12 +252,44 @@ class _PaginaInicioState extends State<PaginaInicio>
     return AnimatedBuilder(
       animation: _controlador,
       builder: (context, _) {
+        if (_controlador.cargandoPerfil ||
+            _controlador.errorCargaPerfil != null) {
+          return Scaffold(
+            appBar: _crearAppBar(),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_controlador.cargandoPerfil) ...[
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      const Text('Cargando tu información de asistencia…'),
+                    ] else ...[
+                      Text(
+                        _controlador.errorCargaPerfil!,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _controlador.cargarPerfil,
+                        child: const Text('Reintentar'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
         final cabeceraTrabajador = _crearCabeceraTrabajador();
         final cabeceraTrabajadorWidgets = cabeceraTrabajador == null
             ? const <Widget>[]
             : <Widget>[cabeceraTrabajador];
 
         return Scaffold(
+          backgroundColor: ColoresPanel.fondo,
           appBar: _crearAppBar(),
           body: SafeArea(
             child: Column(
@@ -260,6 +300,7 @@ class _PaginaInicioState extends State<PaginaInicio>
             ),
           ),
           bottomNavigationBar: NavigationBar(
+            indicatorColor: ColoresPanel.azul.withValues(alpha: 0.12),
             selectedIndex: _indice,
             onDestinationSelected: (indice) {
               setState(() {

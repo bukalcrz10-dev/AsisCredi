@@ -7,7 +7,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_saver
   firebase_auth
   firebase_core
-  firebase_storage
   geolocator_windows
   printing
 )

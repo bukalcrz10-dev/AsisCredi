@@ -9,6 +9,22 @@ class RepositorioUsuariosImpl implements RepositorioUsuarios {
 
   final FuenteDatosUsuariosFirestore _fuenteDatos;
 
+  Future<void> actualizarDatosLaborales({
+    required String id,
+    required String nombreCompleto,
+    required String telefono,
+    required String area,
+    required String cargo,
+    String? sedeAsignadaId,
+  }) => _fuenteDatos.actualizarDatosLaborales(
+    id: id,
+    nombreCompleto: nombreCompleto,
+    telefono: telefono,
+    area: area,
+    cargo: cargo,
+    sedeAsignadaId: sedeAsignadaId,
+  );
+
   @override
   Future<Usuario?> obtenerUsuarioPorId(String id) async {
     final mapa = await _fuenteDatos.obtenerUsuarioPorId(id);
@@ -31,9 +47,6 @@ class RepositorioUsuariosImpl implements RepositorioUsuarios {
   @override
   Future<void> guardarUsuario(Usuario usuario) {
     final modelo = ModeloUsuario.desdeEntidad(usuario);
-    return _fuenteDatos.guardarUsuario(
-      id: usuario.id,
-      datos: modelo.aMapa(),
-    );
+    return _fuenteDatos.guardarUsuario(id: usuario.id, datos: modelo.aMapa());
   }
 }

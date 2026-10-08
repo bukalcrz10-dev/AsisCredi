@@ -42,10 +42,18 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
             width: double.infinity,
             padding: EdgeInsets.symmetric(
               horizontal: compacto ? 14 : 18,
-              vertical: compacto ? 8 : 10,
+              vertical: compacto ? 2 : 3,
             ),
             decoration: const BoxDecoration(
-              color: ColoresSistema.rojoInstitucional,
+              gradient: LinearGradient(
+                colors: [
+                  ColoresPanel.verde,
+                  ColoresPanel.turquesa,
+                  ColoresPanel.azul,
+                ],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(MedidasSistema.radioTarjeta),
                 topRight: Radius.circular(MedidasSistema.radioTarjeta),
@@ -54,13 +62,13 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  'UNACHU',
+                  'CREDIASCIENDE',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Colors.white,
-                        letterSpacing: compacto ? 1.0 : 1.2,
-                        fontWeight: FontWeight.w800,
-                        fontSize: compacto ? 12 : null,
-                      ),
+                    color: Colors.white,
+                    letterSpacing: compacto ? 1.0 : 1.2,
+                    fontWeight: FontWeight.w800,
+                    fontSize: compacto ? 12 : null,
+                  ),
                 ),
                 const Spacer(),
                 Row(
@@ -77,10 +85,10 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
                     Text(
                       'En linea',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontSize: compacto ? 16 : null,
-                          ),
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                        fontSize: compacto ? 16 : null,
+                      ),
                     ),
                   ],
                 ),
@@ -101,45 +109,46 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
                   Text(
                     'Bienvenido',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: ColoresSistema.textoSuave,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      color: ColoresSistema.textoSuave,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
                 Text(
                   nombre,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontSize: compacto ? 20 : 24,
-                        color: ColoresSistema.textoTitulo,
-                        height: 1.1,
-                      ),
+                    fontSize: compacto ? 20 : 24,
+                    color: ColoresSistema.textoTitulo,
+                    height: 1.1,
+                  ),
                 ),
-                SizedBox(height: compacto ? 8 : 10),
+                SizedBox(height: compacto ? 5 : 6),
                 Row(
                   children: [
                     Icon(
                       Icons.location_on,
-                      color: ColoresSistema.rojoInstitucional,
-                      size: compacto ? 24 : 28,
+                      color: ColoresPanel.turquesa,
+                      size: compacto ? 20 : 22,
                     ),
-                    SizedBox(width: compacto ? 6 : 8),
+                    const SizedBox(width: 5),
                     Expanded(
                       child: Text(
                         sede,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
                               color: ColoresSistema.textoFuerte,
-                              fontSize: compacto ? 18 : 21,
+                              fontSize: compacto ? 16 : 17,
                               fontWeight: FontWeight.w500,
                             ),
                       ),
                     ),
                   ],
                 ),
-                SizedBox(height: compacto ? 10 : 12),
+                const SizedBox(height: 7),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
                     _ChipCabecera(
                       icono: Icons.calendar_today_outlined,
@@ -180,7 +189,7 @@ class _ChipCabecera extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: fondo,
         borderRadius: BorderRadius.circular(MedidasSistema.radioChip),
@@ -188,13 +197,13 @@ class _ChipCabecera extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icono, size: 18, color: colorTexto),
-          const SizedBox(width: 8),
+          Icon(icono, size: 15, color: colorTexto),
+          const SizedBox(width: 6),
           Text(
             texto,
             style: TextStyle(
               color: colorTexto,
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),

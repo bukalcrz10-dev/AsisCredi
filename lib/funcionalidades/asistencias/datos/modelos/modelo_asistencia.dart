@@ -22,7 +22,13 @@ class ModeloAsistencia {
     this.correoNotificacion,
     this.urlEvidenciaFacial,
     this.notificacionEnviada = false,
+    this.tipoHorario,
+    this.bloqueJornada,
   });
+
+  // Se conserva el horario y bloque originales para el historial.
+  final String? tipoHorario;
+  final String? bloqueJornada;
 
   final String id;
   final String usuarioId;
@@ -42,6 +48,8 @@ class ModeloAsistencia {
   factory ModeloAsistencia.desdeEntidad(Asistencia asistencia) {
     return ModeloAsistencia(
       id: asistencia.id,
+      tipoHorario: asistencia.tipoHorario,
+      bloqueJornada: asistencia.bloqueJornada,
       usuarioId: asistencia.usuarioId,
       nombreUsuario: asistencia.nombreUsuario,
       sedeId: asistencia.sedeId,
@@ -63,6 +71,8 @@ class ModeloAsistencia {
 
     return ModeloAsistencia(
       id: id,
+      tipoHorario: mapa['tipoHorario'] as String?,
+      bloqueJornada: mapa['bloqueJornada'] as String?,
       usuarioId: mapa['usuarioId'] as String? ?? '',
       nombreUsuario: mapa['nombreUsuario'] as String? ?? '',
       sedeId: mapa['sedeId'] as String? ?? '',
@@ -82,6 +92,8 @@ class ModeloAsistencia {
   Asistencia aEntidad() {
     return Asistencia(
       id: id,
+      tipoHorario: tipoHorario,
+      bloqueJornada: bloqueJornada,
       usuarioId: usuarioId,
       nombreUsuario: nombreUsuario,
       sedeId: sedeId,
@@ -100,6 +112,8 @@ class ModeloAsistencia {
 
   Map<String, dynamic> aMapa() {
     return {
+      if (tipoHorario != null) 'tipoHorario': tipoHorario,
+      if (bloqueJornada != null) 'bloqueJornada': bloqueJornada,
       'usuarioId': usuarioId,
       'nombreUsuario': nombreUsuario,
       'sedeId': sedeId,

@@ -1,69 +1,52 @@
-# Asistencia App UNACHU
+# AsisCredi — CREDIASCIENDE
 
-Aplicacion Flutter para control de asistencia institucional con autenticacion,
-validacion de ubicacion, captura facial e historial personal del trabajador.
+Aplicación Flutter con panel administrador web y aplicación de asistencia para trabajadores. Usa Firebase Authentication (correo y contraseña) y Cloud Firestore. No requiere Cloud Functions ni subida de fotos a Cloud Storage.
 
-## Estado actual
+## Funcionamiento actual
 
-El proyecto se encuentra enfocado en el flujo del trabajador:
+- WEB: administración de trabajadores, sedes, asistencias y reportes.
+- APP móvil: acceso con perfil activo, marcación según cargo, GPS, detección local de rostro, historial y exportación Excel/PDF.
+- Asesor: entrada y salida final. Plataforma: entrada mañana, salida a receso, entrada tarde y salida final.
+- Cada trabajador tiene una sede asignada; configurar coordenadas y radio reales en el panel.
+- Altas con una sesión auxiliar de Auth: no cierran la sesión del administrador. Perfiles, cargos, sedes y estado se guardan en Firestore.
+- Contraseñas: recuperación por enlace enviado al correo del trabajador. El correo de acceso existente no se edita desde el panel.
+- Cuenta inactiva: las reglas y la APP bloquean el acceso institucional. No equivale a deshabilitar la cuenta en Authentication.
+- La detección facial comprueba presencia de rostro; no verifica identidad ni prueba de vida. No guarda fotos nuevas en la nube.
 
-- inicio de sesion institucional
-- registro de entrada y salida
-- validacion por GPS
-- validacion facial por captura
-- historial personal de asistencias
-- perfil del trabajador
+## Configuración
 
-Por ahora no se mantiene codigo activo del panel administrador dentro de la
-aplicacion principal. La prioridad actual es consolidar y limpiar el flujo del
-trabajador antes de abrir la siguiente fase del sistema.
+Consulta [requisitos, recuperación de altas incompletas y límites](docs/modo_sin_facturacion.md).
+Se necesita un administrador activo ya registrado, el proveedor correo/contraseña habilitado y reglas de Firestore que protejan los perfiles y datos institucionales. Spark tiene cuotas; no es ilimitado.
 
-## Estructura principal
+## Ejecución y validación
 
-- `lib/app/`
-  contiene tema, rutas y configuracion visual general
-- `lib/funcionalidades/autenticacion/`
-  modulo de acceso y compuerta de sesion
-- `lib/funcionalidades/asistencias/`
-  modulo principal del trabajador
-- `lib/funcionalidades/geolocalizacion/`
-  validacion de GPS y distancia a la sede
-- `lib/funcionalidades/reconocimiento_facial/`
-  captura de imagen y deteccion facial
-- `lib/funcionalidades/usuarios/`
-  lectura de perfil institucional
-- `lib/funcionalidades/sedes/`
-  datos de sede y radio permitido
-- `lib/funcionalidades/alertas/`
-  registro de incidencias del flujo
-
-## Requisitos funcionales
-
-- Firebase Core
-- Firebase Auth
-- Cloud Firestore
-- Firebase Storage
-- permisos de camara
-- permisos de ubicacion
-- GPS activo en el dispositivo para validar asistencia
-
-## Observaciones tecnicas
-
-- La validacion facial actual detecta si hay un rostro valido en la imagen.
-  Todavia no compara identidad biometrica contra un patron del trabajador.
-- El historial personal se consulta desde Firestore y se ordena localmente.
-- El proyecto sigue en proceso de limpieza tecnica y modularizacion.
-
-## Ejecucion
-
-```bash
+```sh
 flutter pub get
-flutter run
+flutter analyze
+flutter test
+flutter run -d chrome
+flutter run -d <id-del-dispositivo>
 ```
 
-## Pendientes recomendados
+## Compilaciones
 
-- completar limpieza tecnica del proyecto
-- agregar pruebas de reglas de marcacion
-- documentar colecciones de Firestore
-- definir la siguiente fase del panel administrador
+```sh
+flutter build web
+flutter build apk --debug
+```
+
+El panel se genera en `build/web`; la APK de pruebas en `build/app/outputs/flutter-apk/app-debug.apk`.
+Compilar no publica la WEB ni instala la APP. Actualizar ambas para sustituir versiones anteriores.
+
+## Estructura
+
+- `lib/funcionalidades/admin`: panel y administración con Auth/Firestore.
+- `lib/funcionalidades/autenticacion`: inicio de sesión y control de acceso.
+- `lib/funcionalidades/asistencias`: horarios, marcas, historial y exportaciones.
+- `lib/funcionalidades/geolocalizacion`: permisos, GPS y distancia a la sede.
+- `lib/funcionalidades/reconocimiento_facial`: cámara y detección local ML Kit.
+- `lib/funcionalidades/usuarios`, `sedes`, `alertas`: perfiles, sedes e incidencias.
+- `firestore.rules`: reglas locales; su publicación es una operación separada.
+
+No hay servidor Functions ni dependencias de Functions/Storage en el código actual.
+Los campos históricos de URL y la configuración generada de Firebase se conservan para compatibilidad; no realizan cargas de archivos.

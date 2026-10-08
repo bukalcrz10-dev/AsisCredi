@@ -1,7 +1,12 @@
+import '../../../sedes/datos/fuentes_datos/fuente_datos_sedes_firestore.dart';
+import '../../../sedes/datos/modelos/modelo_sede.dart';
+import '../../../sedes/dominio/entidades/sede.dart';
+import 'dialogo_sedes_admin.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../datos/servicios/servicio_trabajadores_auth_functions.dart';
+import '../../datos/servicios/servicio_trabajadores_firebase.dart';
 import '../../../usuarios/datos/fuentes_datos/fuente_datos_usuarios_firestore.dart';
 import '../../../usuarios/datos/repositorios/repositorio_usuarios_impl.dart';
 import '../../../usuarios/dominio/entidades/rol_usuario.dart';
@@ -19,13 +24,14 @@ class ModuloTrabajadoresAdmin extends StatefulWidget {
 }
 
 class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
-  static const _sedePrincipalId = 'sede_principal';
-  static const _sedePrincipalNombre = 'Sede Principal';
+  final _fuenteSedes = FuenteDatosSedesFirestore();
+  List<Sede> _sedes = [];
 
-  final RepositorioUsuariosImpl _repositorioUsuarios =
-      RepositorioUsuariosImpl(FuenteDatosUsuariosFirestore());
-  final ServicioTrabajadoresAuthFunctions _servicioAuthFunctions =
-      ServicioTrabajadoresAuthFunctions();
+  final RepositorioUsuariosImpl _repositorioUsuarios = RepositorioUsuariosImpl(
+    FuenteDatosUsuariosFirestore(),
+  );
+  final ServicioTrabajadoresFirebase _servicioTrabajadores =
+      ServicioTrabajadoresFirebase();
   final TextEditingController _busquedaController = TextEditingController();
 
   List<TrabajadorAdminDemo> _trabajadores = const [];
@@ -53,6 +59,10 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
     });
 
     try {
+      final documentosSedes = await _fuenteSedes.obtenerSedes();
+      _sedes = documentosSedes
+          .map((e) => ModeloSede.desdeMapa(e.value, e.key).aEntidad())
+          .toList();
       final usuarios = await _repositorioUsuarios.obtenerUsuarios();
       final trabajadores = usuarios
           .map<TrabajadorAdminDemo>(_mapearUsuarioATrabajador)
@@ -93,22 +103,25 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
           ? 'Administrador'
           : 'Trabajador',
       estadoActivo: usuario.activo,
-      sede: usuario.sedeAsignadaId == _sedePrincipalId
-          ? _sedePrincipalNombre
-          : (usuario.sedeAsignadaId.isEmpty
-              ? _sedePrincipalNombre
-              : usuario.sedeAsignadaId),
+      sedeId: usuario.sedeAsignadaId,
+      sede:
+          _sedes
+              .where((s) => s.id == usuario.sedeAsignadaId)
+              .map((s) => s.nombre)
+              .firstOrNull ??
+          usuario.sedeAsignadaId,
     );
   }
 
   Future<void> _guardarTrabajador(TrabajadorAdminDemo trabajador) async {
+    if (_guardando) return;
     setState(() {
       _guardando = true;
       _mensajeError = null;
     });
 
     try {
-      await _servicioAuthFunctions.actualizarTrabajador(
+      await _servicioTrabajadores.actualizarTrabajador(
         uid: trabajador.id,
         nombreCompleto: trabajador.nombreCompleto,
         correo: trabajador.correo,
@@ -117,9 +130,21 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
         cargo: trabajador.cargo,
         rol: trabajador.rol,
         activo: trabajador.estadoActivo,
-        sedeAsignadaId: _sedePrincipalId,
+        sedeAsignadaId: trabajador.sedeId,
       );
       await _cargarTrabajadores();
+      if (mounted && _mensajeError == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cambios del trabajador guardados.')),
+        );
+      }
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _guardando = false;
+        _mensajeError =
+            'No se pudo confirmar el guardado a tiempo. Revisa tu conexión y actualiza la lista antes de reintentar.';
+      });
     } on FirebaseAuthException catch (error) {
       if (!mounted) {
         return;
@@ -137,6 +162,14 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
             ? partes.join(' | ')
             : 'No se pudo actualizar el trabajador.';
       });
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _guardando = false;
+        _mensajeError = error.code == 'permission-denied'
+            ? 'Tu sesión no tiene permiso para editar trabajadores. Verifica que el usuario sea administrador activo.'
+            : 'No se pudo guardar el perfil (${error.code}). Revisa tu conexión y actualiza la lista.';
+      });
     } catch (_) {
       if (!mounted) {
         return;
@@ -152,13 +185,14 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
   Future<void> _crearTrabajadorConAcceso(
     _ResultadoDialogoTrabajadorAdmin resultado,
   ) async {
+    if (_guardando) return;
     setState(() {
       _guardando = true;
       _mensajeError = null;
     });
 
     try {
-      await _servicioAuthFunctions.crearTrabajadorConAcceso(
+      await _servicioTrabajadores.crearTrabajadorConAcceso(
         nombreCompleto: resultado.trabajador.nombreCompleto,
         correo: resultado.trabajador.correo,
         telefono: resultado.trabajador.telefono,
@@ -166,7 +200,7 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
         cargo: resultado.trabajador.cargo,
         rol: resultado.trabajador.rol,
         activo: resultado.trabajador.estadoActivo,
-        sedeAsignadaId: _sedePrincipalId,
+        sedeAsignadaId: resultado.trabajador.sedeId,
         password: resultado.password,
       );
       await _cargarTrabajadores();
@@ -188,12 +222,11 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
 
       setState(() {
         _guardando = false;
-        _mensajeError =
-            partes.isNotEmpty
-                ? partes.join(' | ')
-                : 'No se pudo crear el trabajador en Authentication.';
+        _mensajeError = partes.isNotEmpty
+            ? partes.join(' | ')
+            : 'No se pudo crear el trabajador en Authentication.';
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
@@ -201,7 +234,7 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
       setState(() {
         _guardando = false;
         _mensajeError =
-            'No se pudo crear el trabajador en Authentication.';
+            'No se pudo crear el trabajador en Authentication: $error';
       });
     }
   }
@@ -210,7 +243,7 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
     final resultado = await showDialog<_ResultadoDialogoTrabajadorAdmin>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const _DialogoTrabajadorAdmin(),
+      builder: (context) => _DialogoTrabajadorAdmin(sedes: _sedes),
     );
 
     if (resultado == null || !mounted) {
@@ -230,9 +263,8 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
     final resultado = await showDialog<_ResultadoDialogoTrabajadorAdmin>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _DialogoTrabajadorAdmin(
-        trabajadorInicial: trabajador,
-      ),
+      builder: (context) =>
+          _DialogoTrabajadorAdmin(trabajadorInicial: trabajador, sedes: _sedes),
     );
 
     if (resultado == null || !mounted) {
@@ -244,25 +276,22 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
 
   Future<void> _alternarEstadoTrabajador(TrabajadorAdminDemo trabajador) async {
     await _guardarTrabajador(
-      trabajador.copyWith(
-        estadoActivo: !trabajador.estadoActivo,
-      ),
+      trabajador.copyWith(estadoActivo: !trabajador.estadoActivo),
     );
   }
 
   Future<void> _restablecerContrasenaTrabajador(
     TrabajadorAdminDemo trabajador,
-    String nuevaContrasena,
   ) async {
+    if (_guardando) return;
     setState(() {
       _guardando = true;
       _mensajeError = null;
     });
 
     try {
-      await _servicioAuthFunctions.restablecerContrasenaTrabajador(
+      await _servicioTrabajadores.restablecerContrasenaTrabajador(
         uid: trabajador.id,
-        password: nuevaContrasena,
       );
 
       if (!mounted) {
@@ -276,7 +305,9 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Contrasena restablecida correctamente.'),
+          content: Text(
+            'Solicitud enviada. El trabajador debe revisar su correo y la carpeta de spam.',
+          ),
         ),
       );
     } on FirebaseAuthException catch (error) {
@@ -311,19 +342,27 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
   Future<void> _abrirDialogoRestablecerContrasena(
     TrabajadorAdminDemo trabajador,
   ) async {
-    final nuevaContrasena = await showDialog<String>(
+    final enviar = await showDialog<bool>(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => _DialogoRestablecerContrasenaTrabajador(
-        nombreTrabajador: trabajador.nombreCompleto,
+      builder: (context) => AlertDialog(
+        title: const Text('Recuperar contraseña'),
+        content: Text(
+          'Se enviará un enlace a ${trabajador.correo} para que el trabajador elija su nueva contraseña.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Enviar enlace'),
+          ),
+        ],
       ),
     );
-
-    if (nuevaContrasena == null || !mounted) {
-      return;
-    }
-
-    await _restablecerContrasenaTrabajador(trabajador, nuevaContrasena);
+    if (enviar != true || !mounted || _guardando) return;
+    await _restablecerContrasenaTrabajador(trabajador);
   }
 
   List<TrabajadorAdminDemo> get _trabajadoresFiltrados {
@@ -376,7 +415,7 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
                   const _ChipInfoAdmin(
                     icono: Icons.account_balance_outlined,
                     etiqueta: 'Sede principal',
-                    valor: 'UNACHU',
+                    valor: 'CREDIASCIENDE',
                   ),
                 ],
               ),
@@ -386,9 +425,7 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: ColoresSistema.rojoInstitucional.withValues(
-                      alpha: 0.08,
-                    ),
+                    color: ColoresPanel.turquesa.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(
                       MedidasSistema.radioCampo,
                     ),
@@ -397,8 +434,8 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
                   child: Text(
                     _mensajeError!,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: ColoresSistema.rojoInstitucionalOscuro,
-                        ),
+                      color: ColoresSistema.rojoInstitucionalOscuro,
+                    ),
                   ),
                 ),
               ],
@@ -420,16 +457,16 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
               Text(
                 'Listado de trabajadores',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
                 'Busca por nombre, correo, telefono, area, cargo, rol o sede.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: ColoresSistema.textoSecundario,
-                    ),
+                  color: ColoresSistema.textoSecundario,
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -445,6 +482,21 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
                 ),
               ),
               const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _guardando
+                    ? null
+                    : () async {
+                        final guardado = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => DialogoSedesAdmin(sedes: _sedes),
+                        );
+                        if (guardado == true && mounted) {
+                          await _cargarTrabajadores();
+                        }
+                      },
+                icon: const Icon(Icons.location_on_outlined),
+                label: const Text('Configurar sedes'),
+              ),
               Align(
                 alignment: Alignment.centerRight,
                 child: FilledButton.icon(
@@ -465,9 +517,9 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
                 child: Text(
                   'Registros encontrados: ${trabajadores.length}',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: ColoresSistema.rojoInstitucionalOscuro,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: ColoresSistema.rojoInstitucionalOscuro,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               const SizedBox(height: 18),
@@ -495,8 +547,8 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
                         : 'No se encontraron trabajadores con esa busqueda.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: ColoresSistema.textoSecundario,
-                        ),
+                      color: ColoresSistema.textoSecundario,
+                    ),
                   ),
                 )
               else
@@ -510,9 +562,8 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
                           : () => _abrirDialogoEditarTrabajador(trabajador),
                       onRestablecerContrasena: _guardando
                           ? null
-                          : () => _abrirDialogoRestablecerContrasena(
-                              trabajador,
-                            ),
+                          : () =>
+                                _abrirDialogoRestablecerContrasena(trabajador),
                       onAlternarEstado: _guardando
                           ? null
                           : () => _alternarEstadoTrabajador(trabajador),
@@ -529,14 +580,14 @@ class _ModuloTrabajadoresAdminState extends State<ModuloTrabajadoresAdmin> {
 }
 
 class _DialogoTrabajadorAdmin extends StatefulWidget {
-  const _DialogoTrabajadorAdmin({
-    this.trabajadorInicial,
-  });
+  const _DialogoTrabajadorAdmin({this.trabajadorInicial, required this.sedes});
+  final List<Sede> sedes;
 
   final TrabajadorAdminDemo? trabajadorInicial;
 
   @override
-  State<_DialogoTrabajadorAdmin> createState() => _DialogoTrabajadorAdminState();
+  State<_DialogoTrabajadorAdmin> createState() =>
+      _DialogoTrabajadorAdminState();
 }
 
 class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
@@ -545,7 +596,7 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
   late final TextEditingController _telefonoController;
   late final TextEditingController _areaController;
   late final TextEditingController _cargoController;
-  late final TextEditingController _sedeController;
+  String? _sedeId;
   late final TextEditingController _passwordController;
   late String _rol;
   late bool _estadoActivo;
@@ -558,21 +609,13 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
     _nombreController = TextEditingController(
       text: trabajador?.nombreCompleto ?? '',
     );
-    _correoController = TextEditingController(
-      text: trabajador?.correo ?? '',
-    );
+    _correoController = TextEditingController(text: trabajador?.correo ?? '');
     _telefonoController = TextEditingController(
       text: trabajador?.telefono ?? '',
     );
-    _areaController = TextEditingController(
-      text: trabajador?.area ?? '',
-    );
-    _cargoController = TextEditingController(
-      text: trabajador?.cargo ?? '',
-    );
-    _sedeController = TextEditingController(
-      text: trabajador?.sede ?? _ModuloTrabajadoresAdminState._sedePrincipalNombre,
-    );
+    _areaController = TextEditingController(text: trabajador?.area ?? '');
+    _cargoController = TextEditingController(text: trabajador?.cargo ?? '');
+    _sedeId = trabajador?.sedeId.isNotEmpty == true ? trabajador!.sedeId : null;
     _passwordController = TextEditingController();
     _rol = trabajador?.rol ?? 'Trabajador';
     _estadoActivo = trabajador?.estadoActivo ?? true;
@@ -585,10 +628,11 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
     _telefonoController.dispose();
     _areaController.dispose();
     _cargoController.dispose();
-    _sedeController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
+
+  String? _errorFormulario;
 
   void _guardar() {
     final editando = widget.trabajadorInicial != null;
@@ -597,20 +641,27 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
     final telefono = _telefonoController.text.trim();
     final area = _areaController.text.trim();
     final cargo = _cargoController.text.trim();
-    final sede = _sedeController.text.trim();
-    final password = _passwordController.text.trim();
+    final sede = widget.sedes.where((s) => s.id == _sedeId).firstOrNull;
+    final password = _passwordController.text;
 
-    if (nombre.isEmpty ||
-        correo.isEmpty ||
-        telefono.isEmpty ||
-        area.isEmpty ||
-        cargo.isEmpty ||
-        sede.isEmpty ||
-        (!editando && password.isEmpty)) {
+    final faltantes = <String>[
+      if (nombre.isEmpty) 'nombre',
+      if (correo.isEmpty) 'correo',
+      if (!editando && telefono.isEmpty) 'teléfono',
+      if (!editando && area.isEmpty) 'área',
+      if (cargo.isEmpty) 'cargo',
+      if (_sedeId == null || _sedeId!.isEmpty) 'sede',
+      if (!editando && password.isEmpty) 'contraseña',
+    ];
+    if (faltantes.isNotEmpty) {
+      setState(() => _errorFormulario = 'Completa: ${faltantes.join(', ')}.');
       return;
     }
-
     if (!editando && password.length < 6) {
+      setState(
+        () => _errorFormulario =
+            'La contraseña debe tener al menos 6 caracteres.',
+      );
       return;
     }
 
@@ -623,7 +674,8 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
       cargo: cargo,
       rol: _rol,
       estadoActivo: _estadoActivo,
-      sede: sede,
+      sede: sede?.nombre ?? widget.trabajadorInicial?.sede ?? '',
+      sedeId: _sedeId!,
     );
 
     Navigator.of(context).pop(
@@ -642,9 +694,9 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
         .map((parte) => parte[0].toUpperCase())
         .join()
         .padRight(2, 'X');
-    final sufijo = DateTime.now().millisecondsSinceEpoch
-        .toString()
-        .substring(9);
+    final sufijo = DateTime.now().millisecondsSinceEpoch.toString().substring(
+      9,
+    );
     return 'TR-$iniciales-$sufijo';
   }
 
@@ -656,9 +708,9 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
       title: Text(
         editando ? 'Editar trabajador' : 'Nuevo trabajador',
         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            ),
+          fontSize: 20,
+          fontWeight: FontWeight.w900,
+        ),
       ),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
@@ -672,42 +724,51 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
                     ? 'Actualiza los datos base del trabajador seleccionado.'
                     : 'Ingresa los datos base para registrar un trabajador con acceso al sistema.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: ColoresSistema.textoSecundario,
-                    ),
+                  color: ColoresSistema.textoSecundario,
+                ),
               ),
+              if (_errorFormulario != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    _errorFormulario!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 18),
               TextField(
                 controller: _nombreController,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre completo',
-                ),
+                decoration: const InputDecoration(labelText: 'Nombre completo'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _correoController,
-                decoration: const InputDecoration(
+                readOnly: editando,
+                decoration: InputDecoration(
+                  helperText: editando
+                      ? 'El correo de acceso no se modifica desde el panel.'
+                      : null,
                   labelText: 'Correo institucional',
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _telefonoController,
-                decoration: const InputDecoration(
-                  labelText: 'Telefono',
-                ),
+                decoration: const InputDecoration(labelText: 'Telefono'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _areaController,
-                decoration: const InputDecoration(
-                  labelText: 'Area',
-                ),
+                decoration: const InputDecoration(labelText: 'Area'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _cargoController,
                 decoration: const InputDecoration(
                   labelText: 'Cargo',
+                  helperText: 'Para marcar asistencia: Asesor o Plataforma.',
                 ),
               ),
               if (!editando) ...[
@@ -740,9 +801,7 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _rol,
-                      decoration: const InputDecoration(
-                        labelText: 'Rol',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Rol'),
                       items: const [
                         DropdownMenuItem(
                           value: 'Trabajador',
@@ -765,12 +824,28 @@ class _DialogoTrabajadorAdminState extends State<_DialogoTrabajadorAdmin> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: TextField(
-                      controller: _sedeController,
-                      enabled: false,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _sedeId,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Sede asignada',
                       ),
+                      items: [
+                        for (final sede in widget.sedes.where(
+                          (s) => s.activa || s.id == _sedeId,
+                        ))
+                          DropdownMenuItem(
+                            value: sede.id,
+                            child: Text(sede.nombre),
+                          ),
+                        if (_sedeId != null &&
+                            !widget.sedes.any((s) => s.id == _sedeId))
+                          DropdownMenuItem(
+                            value: _sedeId,
+                            child: Text('Sede anterior ($_sedeId)'),
+                          ),
+                      ],
+                      onChanged: (valor) => setState(() => _sedeId = valor),
                     ),
                   ),
                 ],
@@ -816,124 +891,6 @@ class _ResultadoDialogoTrabajadorAdmin {
   final String password;
 }
 
-class _DialogoRestablecerContrasenaTrabajador extends StatefulWidget {
-  const _DialogoRestablecerContrasenaTrabajador({
-    required this.nombreTrabajador,
-  });
-
-  final String nombreTrabajador;
-
-  @override
-  State<_DialogoRestablecerContrasenaTrabajador> createState() =>
-      _DialogoRestablecerContrasenaTrabajadorState();
-}
-
-class _DialogoRestablecerContrasenaTrabajadorState
-    extends State<_DialogoRestablecerContrasenaTrabajador> {
-  late final TextEditingController _passwordController;
-  late final TextEditingController _confirmacionController;
-  bool _mostrarPassword = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _passwordController = TextEditingController();
-    _confirmacionController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _passwordController.dispose();
-    _confirmacionController.dispose();
-    super.dispose();
-  }
-
-  void _confirmar() {
-    final password = _passwordController.text.trim();
-    final confirmacion = _confirmacionController.text.trim();
-
-    if (password.isEmpty || confirmacion.isEmpty) {
-      return;
-    }
-
-    if (password.length < 6 || password != confirmacion) {
-      return;
-    }
-
-    Navigator.of(context).pop(password);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        'Restablecer contrasena',
-        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            ),
-      ),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Define una nueva contrasena para ${widget.nombreTrabajador}.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: ColoresSistema.textoSecundario,
-                    ),
-              ),
-              const SizedBox(height: 18),
-              TextField(
-                controller: _passwordController,
-                obscureText: !_mostrarPassword,
-                decoration: InputDecoration(
-                  labelText: 'Nueva contrasena',
-                  helperText: 'Minimo 6 caracteres.',
-                  suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(() {
-                        _mostrarPassword = !_mostrarPassword;
-                      });
-                    },
-                    icon: Icon(
-                      _mostrarPassword
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _confirmacionController,
-                obscureText: !_mostrarPassword,
-                decoration: const InputDecoration(
-                  labelText: 'Confirmar contrasena',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        OutlinedButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton.icon(
-          onPressed: _confirmar,
-          icon: const Icon(Icons.lock_reset_outlined),
-          label: const Text('Restablecer'),
-        ),
-      ],
-    );
-  }
-}
-
 class _ChipInfoAdmin extends StatelessWidget {
   const _ChipInfoAdmin({
     required this.icono,
@@ -957,7 +914,7 @@ class _ChipInfoAdmin extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icono, size: 18, color: ColoresSistema.rojoInstitucional),
+          Icon(icono, size: 18, color: ColoresPanel.turquesa),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -965,17 +922,17 @@ class _ChipInfoAdmin extends StatelessWidget {
               Text(
                 etiqueta,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: ColoresSistema.textoSecundario,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: ColoresSistema.textoSecundario,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 valor,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: ColoresSistema.textoTitulo,
-                    ),
+                  fontWeight: FontWeight.w800,
+                  color: ColoresSistema.textoTitulo,
+                ),
               ),
             ],
           ),
@@ -1018,12 +975,12 @@ class _TarjetaTrabajadorAdmin extends StatelessWidget {
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: ColoresSistema.rojoInstitucional.withValues(alpha: 0.10),
+              color: ColoresPanel.turquesa.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(
               Icons.person_outline,
-              color: ColoresSistema.rojoInstitucional,
+              color: ColoresPanel.turquesa,
             ),
           ),
           const SizedBox(width: 14),
@@ -1034,45 +991,45 @@ class _TarjetaTrabajadorAdmin extends StatelessWidget {
                 Text(
                   trabajador.nombreCompleto,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: ColoresSistema.textoTitulo,
-                      ),
+                    fontWeight: FontWeight.w800,
+                    color: ColoresSistema.textoTitulo,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Correo: ${trabajador.correo}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.textoBase,
-                      ),
+                    color: ColoresSistema.textoBase,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Telefono: ${trabajador.telefono}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.textoBase,
-                      ),
+                    color: ColoresSistema.textoBase,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Area: ${trabajador.area}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.textoBase,
-                      ),
+                    color: ColoresSistema.textoBase,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Cargo: ${trabajador.cargo}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.textoBase,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: ColoresSistema.textoBase,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${trabajador.rol} - ${trabajador.sede}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.textoSecundario,
-                      ),
+                    color: ColoresSistema.textoSecundario,
+                  ),
                 ),
               ],
             ),
@@ -1087,9 +1044,9 @@ class _TarjetaTrabajadorAdmin extends StatelessWidget {
             child: Text(
               trabajador.estadoActivo ? 'Activo' : 'Inactivo',
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: colorEstado,
-                    fontWeight: FontWeight.w800,
-                  ),
+                color: colorEstado,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           const SizedBox(width: 8),

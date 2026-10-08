@@ -5,11 +5,13 @@ import '../controladores/fabrica_controlador_inicio_sesion.dart';
 import '../widgets/componentes_inicio_sesion.dart';
 import '../widgets/formulario_inicio_sesion.dart';
 
-// Pantalla de acceso institucional con identidad visual de UNACHU.
+// Pantalla de acceso institucional con identidad visual de CREDIASCIENDE.
 // Mantiene la autenticacion actual por correo y contrasena,
 // pero la presenta con una estructura mas institucional y clara en movil.
 class PaginaInicioSesion extends StatefulWidget {
-  const PaginaInicioSesion({super.key});
+  const PaginaInicioSesion({super.key, this.crearControlador});
+
+  final ControladorInicioSesion Function()? crearControlador;
 
   @override
   State<PaginaInicioSesion> createState() => _PaginaInicioSesionState();
@@ -26,7 +28,7 @@ class _PaginaInicioSesionState extends State<PaginaInicioSesion> {
     super.initState();
     _correoController = TextEditingController();
     _contrasenaController = TextEditingController();
-    _controlador = crearControladorInicioSesion();
+    _controlador = widget.crearControlador?.call() ?? crearControladorInicioSesion(trabajador: true);
   }
 
   @override

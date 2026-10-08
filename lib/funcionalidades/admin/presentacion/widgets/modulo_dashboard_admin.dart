@@ -84,9 +84,13 @@ class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
     final filas = grupos.values.map((grupo) => grupo.aFila()).toList()
       ..sort((a, b) => b.fechaEvento.compareTo(a.fechaEvento));
 
-    final filasHoy = filas.where((fila) => _mismaFecha(fila.fechaOrden, hoy)).toList();
+    final filasHoy = filas
+        .where((fila) => _mismaFecha(fila.fechaOrden, hoy))
+        .toList();
     final trabajadoresActivos = usuarios
-        .where((usuario) => usuario.activo && usuario.rol == RolUsuario.trabajador)
+        .where(
+          (usuario) => usuario.activo && usuario.rol == RolUsuario.trabajador,
+        )
         .length;
 
     final actividadReciente = filas.take(4).map(_crearActividad).toList();
@@ -94,8 +98,12 @@ class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
     return _DashboardAdminData(
       trabajadoresActivos: trabajadoresActivos,
       asistenciasHoy: filasHoy.length,
-      pendientesHoy: filasHoy.where((fila) => fila.estado == 'Pendiente').length,
-      observadasHoy: filasHoy.where((fila) => fila.estado == 'Observada').length,
+      pendientesHoy: filasHoy
+          .where((fila) => fila.estado == 'Pendiente')
+          .length,
+      observadasHoy: filasHoy
+          .where((fila) => fila.estado == 'Observada')
+          .length,
       actividadReciente: actividadReciente,
     );
   }
@@ -104,9 +112,10 @@ class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
     if (fila.estado == 'Pendiente') {
       return _ActividadDashboard(
         titulo: '${fila.trabajador} mantiene salida pendiente',
-        detalle: 'El registro del dia continua abierto y requiere cierre de jornada.',
+        detalle:
+            'El registro del dia continua abierto y requiere cierre de jornada.',
         etiqueta: 'Pendiente',
-        colorAcento: ColoresSistema.rojoInstitucional,
+        colorAcento: ColoresPanel.turquesa,
       );
     }
 
@@ -119,12 +128,14 @@ class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
       );
     }
 
-    final hora = fila.entrada != '--:--' ? fila.entrada : _formatearHora(fila.fechaEvento);
+    final hora = fila.entrada != '--:--'
+        ? fila.entrada
+        : _formatearHora(fila.fechaEvento);
     return _ActividadDashboard(
       titulo: '${fila.trabajador} registro entrada',
       detalle: 'Entrada validada a las $hora en la sede principal.',
       etiqueta: hora,
-      colorAcento: ColoresSistema.rojoInstitucional,
+      colorAcento: ColoresPanel.azul,
     );
   }
 
@@ -156,23 +167,23 @@ class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
                 Text(
                   'Indicadores principales',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'No se pudieron cargar los datos reales del panel administrativo.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.textoSecundario,
-                      ),
+                    color: ColoresSistema.textoSecundario,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   '${snapshot.error}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.rojoInstitucionalOscuro,
-                      ),
+                    color: ColoresSistema.rojoInstitucionalOscuro,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 FilledButton.icon(
@@ -194,16 +205,16 @@ class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
               Text(
                 'Indicadores principales',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
                 'Cifras generales y actividad reciente con datos reales del sistema.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: ColoresSistema.textoSecundario,
-                    ),
+                  color: ColoresSistema.textoSecundario,
+                ),
               ),
               const SizedBox(height: 18),
               Wrap(
@@ -211,14 +222,14 @@ class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
                 runSpacing: 14,
                 children: [
                   _IndicadorDashboardAdmin(
-                    colorAcento: ColoresSistema.rojoInstitucional,
+                    colorAcento: ColoresPanel.azul,
                     icono: Icons.groups_2_outlined,
                     etiqueta: 'Personal habilitado',
                     titulo: 'Trabajadores activos',
                     valor: '${datos.trabajadoresActivos}',
                   ),
                   _IndicadorDashboardAdmin(
-                    colorAcento: ColoresSistema.verdeInstitucional,
+                    colorAcento: ColoresPanel.verde,
                     icono: Icons.fact_check_outlined,
                     etiqueta: 'Registros del dia',
                     titulo: 'Asistencias de hoy',
@@ -251,16 +262,16 @@ class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
                 'Actividad reciente',
                 textAlign: TextAlign.left,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
                 'Movimientos recientes para seguimiento rapido del administrador.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: ColoresSistema.textoSecundario,
-                    ),
+                  color: ColoresSistema.textoSecundario,
+                ),
               ),
               const SizedBox(height: 16),
               ...datos.actividadReciente.map(
@@ -278,9 +289,7 @@ class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
 }
 
 class _TarjetaDashboardAdmin extends StatelessWidget {
-  const _TarjetaDashboardAdmin({
-    required this.child,
-  });
+  const _TarjetaDashboardAdmin({required this.child});
 
   final Widget child;
 
@@ -348,9 +357,9 @@ class _IndicadorDashboardAdmin extends StatelessWidget {
               child: Text(
                 etiqueta,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: ColoresSistema.textoSecundario,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: ColoresSistema.textoSecundario,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -358,18 +367,18 @@ class _IndicadorDashboardAdmin extends StatelessWidget {
           Text(
             titulo,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: ColoresSistema.textoTitulo,
-                ),
+              fontWeight: FontWeight.w700,
+              color: ColoresSistema.textoTitulo,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             valor,
             style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: ColoresSistema.textoTitulo,
-                ),
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: ColoresSistema.textoTitulo,
+            ),
           ),
         ],
       ),
@@ -378,9 +387,7 @@ class _IndicadorDashboardAdmin extends StatelessWidget {
 }
 
 class _FilaActividadDashboard extends StatelessWidget {
-  const _FilaActividadDashboard({
-    required this.item,
-  });
+  const _FilaActividadDashboard({required this.item});
 
   final _ActividadDashboard item;
 
@@ -412,16 +419,16 @@ class _FilaActividadDashboard extends StatelessWidget {
                 Text(
                   item.titulo,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: ColoresSistema.textoTitulo,
-                      ),
+                    fontWeight: FontWeight.w700,
+                    color: ColoresSistema.textoTitulo,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   item.detalle,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.textoSecundario,
-                      ),
+                    color: ColoresSistema.textoSecundario,
+                  ),
                 ),
               ],
             ),
@@ -436,9 +443,9 @@ class _FilaActividadDashboard extends StatelessWidget {
             child: Text(
               item.etiqueta,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: ColoresSistema.textoSecundario,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: ColoresSistema.textoSecundario,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -457,11 +464,11 @@ class _DashboardAdminData {
   });
 
   const _DashboardAdminData.vacio()
-      : trabajadoresActivos = 0,
-        asistenciasHoy = 0,
-        pendientesHoy = 0,
-        observadasHoy = 0,
-        actividadReciente = const [];
+    : trabajadoresActivos = 0,
+      asistenciasHoy = 0,
+      pendientesHoy = 0,
+      observadasHoy = 0,
+      actividadReciente = const [];
 
   final int trabajadoresActivos;
   final int asistenciasHoy;
@@ -516,12 +523,14 @@ class _GrupoDashboardAdmin {
     final estado = !completa
         ? 'Pendiente'
         : (!todasDentroZona || !todasConRostro || observaciones.isNotEmpty)
-            ? 'Observada'
-            : 'Correcta';
+        ? 'Observada'
+        : 'Correcta';
 
     return _FilaDashboardAdmin(
       usuarioId: usuarioId,
-      trabajador: trabajador.trim().isEmpty ? 'Trabajador sin nombre' : trabajador,
+      trabajador: trabajador.trim().isEmpty
+          ? 'Trabajador sin nombre'
+          : trabajador,
       correo: correo,
       fechaTexto: fechaTexto,
       fechaOrden: fechaOrden,

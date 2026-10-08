@@ -1,10 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import '../modelos/regularizacion_jornada.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../app/diseno_sistema.dart';
 import '../../../asistencias/datos/fuentes_datos/fuente_datos_asistencias_firestore.dart';
 import '../../../asistencias/datos/repositorios/repositorio_asistencias_impl.dart';
 import '../../../asistencias/dominio/entidades/asistencia.dart';
-import '../../../asistencias/dominio/entidades/tipo_marcacion.dart';
 import '../../../asistencias/presentacion/controladores/controlador_asistencia_auxiliares.dart';
 import '../../../usuarios/datos/fuentes_datos/fuente_datos_usuarios_firestore.dart';
 import '../../../usuarios/datos/repositorios/repositorio_usuarios_impl.dart';
@@ -58,15 +58,13 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
   Future<List<_AsistenciaAdminFila>> _cargarFilasAsistencias() async {
     final asistencias = await _repositorioAsistencias.obtenerAsistencias();
     final usuarios = await _repositorioUsuarios.obtenerUsuarios();
-    final usuariosPorId = {
-      for (final usuario in usuarios) usuario.id: usuario,
-    };
+    final usuariosPorId = {for (final usuario in usuarios) usuario.id: usuario};
 
     final grupos = <String, _GrupoAsistenciaAdmin>{};
 
     for (final asistencia in asistencias) {
       final fecha = _formatearFecha(asistencia.fechaHora);
-      final clave = '${asistencia.usuarioId}|$fecha';
+      final clave = '${asistencia.usuarioId}|$fecha|${asistencia.sedeId}';
       final usuario = usuariosPorId[asistencia.usuarioId];
 
       final grupo = grupos.putIfAbsent(
@@ -80,7 +78,7 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
           correo: usuario?.correo ?? asistencia.correoNotificacion ?? '',
           area: usuario?.area ?? '',
           cargo: usuario?.cargo ?? '',
-          sedeId: usuario?.sedeAsignadaId ?? '',
+          sedeId: asistencia.sedeId,
         ),
       );
 
@@ -98,10 +96,12 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
     final consulta = _busqueda.trim().toLowerCase();
 
     return asistencias.where((asistencia) {
-      final coincideEstado = _estadoSeleccionado == 'Todos' ||
+      final coincideEstado =
+          _estadoSeleccionado == 'Todos' ||
           asistencia.estado == _estadoSeleccionado;
 
-      final coincideBusqueda = consulta.isEmpty ||
+      final coincideBusqueda =
+          consulta.isEmpty ||
           asistencia.trabajador.toLowerCase().contains(consulta) ||
           asistencia.correo.toLowerCase().contains(consulta) ||
           asistencia.area.toLowerCase().contains(consulta) ||
@@ -143,8 +143,8 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                 Text(
                   'Ocurrio un problema al consultar las asistencias reales. Revisa permisos, conexion o indices de Firestore.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: ColoresSistema.rojoInstitucionalOscuro,
-                      ),
+                    color: ColoresSistema.rojoInstitucionalOscuro,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 FilledButton.icon(
@@ -159,12 +159,15 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
 
         final todas = snapshot.data ?? const <_AsistenciaAdminFila>[];
         final asistencias = _filtrarAsistencias(todas);
-        final correctas =
-            todas.where((item) => item.estado == 'Correcta').length;
-        final observadas =
-            todas.where((item) => item.estado == 'Observada').length;
-        final pendientes =
-            todas.where((item) => item.estado == 'Pendiente').length;
+        final correctas = todas
+            .where((item) => item.estado == 'Correcta')
+            .length;
+        final observadas = todas
+            .where((item) => item.estado == 'Observada')
+            .length;
+        final pendientes = todas
+            .where((item) => item.estado == 'Pendiente')
+            .length;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +180,7 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                   titulo: 'Marcaciones cargadas',
                   valor: '${todas.length}',
                   detalle: 'Registros agrupados desde Firestore.',
-                  colorAcento: ColoresSistema.rojoInstitucional,
+                  colorAcento: ColoresPanel.azul,
                   icono: Icons.fact_check_outlined,
                 ),
                 TarjetaResumenAdmin(
@@ -361,9 +364,9 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                     child: Text(
                       'Registros encontrados: ${asistencias.length}',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: ColoresSistema.rojoInstitucionalOscuro,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: ColoresPanel.azul,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -371,9 +374,7 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                     builder: (context, constraints) {
                       final usarTablaCompacta = constraints.maxWidth < 1200;
 
-                      Widget contenidoTabla({
-                        required bool compacta,
-                      }) {
+                      Widget contenidoTabla({required bool compacta}) {
                         return Container(
                           decoration: BoxDecoration(
                             color: ColoresSistema.fondoSuave,
@@ -415,19 +416,27 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                                           ),
                                           SizedBox(
                                             width: 85,
-                                            child: _TituloColumna('Entrada\nMaÃ±ana'),
+                                            child: _TituloColumna(
+                                              'Entrada\nMaÃ±ana',
+                                            ),
                                           ),
                                           SizedBox(
                                             width: 85,
-                                            child: _TituloColumna('Salida\nMaÃ±ana'),
+                                            child: _TituloColumna(
+                                              'Salida\nMaÃ±ana',
+                                            ),
                                           ),
                                           SizedBox(
                                             width: 85,
-                                            child: _TituloColumna('Entrada\nTarde'),
+                                            child: _TituloColumna(
+                                              'Entrada\nTarde',
+                                            ),
                                           ),
                                           SizedBox(
                                             width: 85,
-                                            child: _TituloColumna('Salida\nTarde'),
+                                            child: _TituloColumna(
+                                              'Salida\nTarde',
+                                            ),
                                           ),
                                           SizedBox(
                                             width: 75,
@@ -435,7 +444,9 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                                           ),
                                           SizedBox(
                                             width: 85,
-                                            child: _TituloColumna('T. laborado'),
+                                            child: _TituloColumna(
+                                              'T. laborado',
+                                            ),
                                           ),
                                           SizedBox(
                                             width: 110,
@@ -459,19 +470,27 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: _TituloColumna('Entrada\nMaÃ±ana'),
+                                            child: _TituloColumna(
+                                              'Entrada\nMaÃ±ana',
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: _TituloColumna('Salida\nMaÃ±ana'),
+                                            child: _TituloColumna(
+                                              'Salida\nMaÃ±ana',
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: _TituloColumna('Entrada\nTarde'),
+                                            child: _TituloColumna(
+                                              'Entrada\nTarde',
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: _TituloColumna('Salida\nTarde'),
+                                            child: _TituloColumna(
+                                              'Salida\nTarde',
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 1,
@@ -479,7 +498,9 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                                           ),
                                           Expanded(
                                             flex: 1,
-                                            child: _TituloColumna('T. laborado'),
+                                            child: _TituloColumna(
+                                              'T. laborado',
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 2,
@@ -560,9 +581,9 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
           title: Text(
             'Detalle de marcacion',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
@@ -576,11 +597,15 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                 ),
                 _DatoDetalleAdmin(
                   etiqueta: 'Cargo',
-                  valor: asistencia.cargo.isEmpty ? 'Sin cargo' : asistencia.cargo,
+                  valor: asistencia.cargo.isEmpty
+                      ? 'Sin cargo'
+                      : asistencia.cargo,
                 ),
                 _DatoDetalleAdmin(
                   etiqueta: 'Correo',
-                  valor: asistencia.correo.isEmpty ? 'Sin correo' : asistencia.correo,
+                  valor: asistencia.correo.isEmpty
+                      ? 'Sin correo'
+                      : asistencia.correo,
                 ),
                 _DatoDetalleAdmin(
                   etiqueta: 'Ubic. E. manana',
@@ -598,17 +623,14 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                   etiqueta: 'Ubic. S. tarde',
                   valor: asistencia.ubicacionSalidaTarde,
                 ),
-                _DatoDetalleAdmin(
-                  etiqueta: 'Rostro',
-                  valor: asistencia.rostro,
-                ),
+                _DatoDetalleAdmin(etiqueta: 'Rostro', valor: asistencia.rostro),
                 const SizedBox(height: 8),
                 Text(
                   'Observacion',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: ColoresSistema.textoSecundario,
-                      ),
+                    fontWeight: FontWeight.w800,
+                    color: ColoresSistema.textoSecundario,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Container(
@@ -653,7 +675,9 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
     await _mostrarDialogoRegularizacion(asistencia);
   }
 
-  Future<void> _mostrarDialogoRegularizacion(_AsistenciaAdminFila asistencia) async {
+  Future<void> _mostrarDialogoRegularizacion(
+    _AsistenciaAdminFila asistencia,
+  ) async {
     final actualizado = await showDialog<bool>(
       context: context,
       builder: (_) => _DialogoRegularizacionAsistencia(
@@ -689,250 +713,144 @@ class _DialogoRegularizacionAsistencia extends StatefulWidget {
 
 class _DialogoRegularizacionAsistenciaState
     extends State<_DialogoRegularizacionAsistencia> {
-  late final TextEditingController _entradaMananaController;
-  late final TextEditingController _salidaMananaController;
-  late final TextEditingController _entradaTardeController;
-  late final TextEditingController _salidaTardeController;
-
+  RegularizacionJornada? _jornada;
+  final _horas = <String, TextEditingController>{};
   bool _guardando = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _entradaMananaController = TextEditingController(
-      text: _textoHoraEditable(widget.asistencia.entradaMananaRef),
-    );
-    _salidaMananaController = TextEditingController(
-      text: _textoHoraEditable(widget.asistencia.salidaMananaRef),
-    );
-    _entradaTardeController = TextEditingController(
-      text: _textoHoraEditable(widget.asistencia.entradaTardeRef),
-    );
-    _salidaTardeController = TextEditingController(
-      text: _textoHoraEditable(widget.asistencia.salidaTardeRef),
-    );
+    try {
+      final jornada = RegularizacionJornada(widget.asistencia.originales);
+      _jornada = jornada;
+      for (final campo in jornada.campos) {
+        _horas[jornada.clave(campo)] = TextEditingController(
+          text: jornada.texto(campo),
+        );
+      }
+    } on FormatException catch (error) {
+      _error = error.message;
+    }
   }
 
   @override
   void dispose() {
-    _entradaMananaController.dispose();
-    _salidaMananaController.dispose();
-    _entradaTardeController.dispose();
-    _salidaTardeController.dispose();
+    for (final controller in _horas.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _guardar() async {
-    final asistencia = widget.asistencia;
-    final fechaBase = DateTime(
-      asistencia.fechaOrden.year,
-      asistencia.fechaOrden.month,
-      asistencia.fechaOrden.day,
-    );
-
-    final horarios = <_RegularizacionHorario>[
-      _RegularizacionHorario(
-        etiqueta: 'Entrada mañana',
-        valor: _entradaMananaController.text,
-        existente: asistencia.entradaMananaRef,
-        tipoMarcacion: TipoMarcacion.entrada,
-      ),
-      _RegularizacionHorario(
-        etiqueta: 'Salida mañana',
-        valor: _salidaMananaController.text,
-        existente: asistencia.salidaMananaRef,
-        tipoMarcacion: TipoMarcacion.salida,
-      ),
-      _RegularizacionHorario(
-        etiqueta: 'Entrada tarde',
-        valor: _entradaTardeController.text,
-        existente: asistencia.entradaTardeRef,
-        tipoMarcacion: TipoMarcacion.entrada,
-      ),
-      _RegularizacionHorario(
-        etiqueta: 'Salida tarde',
-        valor: _salidaTardeController.text,
-        existente: asistencia.salidaTardeRef,
-        tipoMarcacion: TipoMarcacion.salida,
-      ),
-    ];
-
-    final datetimes = <_RegularizacionHorario, DateTime?>{};
-    for (final horario in horarios) {
-      final valor = horario.valor.trim();
-      if (valor.isEmpty) {
-        datetimes[horario] = null;
-        continue;
-      }
-
-      final fechaHora = _parsearHoraEnFechaRegularizacion(
-        fechaBase,
-        valor,
-        horario.etiqueta,
-      );
-      if (fechaHora == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'La hora de ${horario.etiqueta.toLowerCase()} debe tener formato HH:mm.',
-            ),
-          ),
-        );
-        return;
-      }
-      datetimes[horario] = fechaHora;
-    }
-
-    setState(() {
-      _guardando = true;
-    });
-
+    if (_guardando || _jornada == null) return;
     try {
-      for (final horario in horarios) {
-        final fechaHora = datetimes[horario];
-        final existente = horario.existente;
-        final valor = horario.valor.trim();
-
-        if (valor.isEmpty && existente == null) {
-          continue;
-        }
-
-        if (fechaHora == null && existente != null) {
-          continue;
-        }
-
-        if (existente != null) {
-          if (fechaHora != null && existente.fechaHora == fechaHora) {
-            continue;
-          }
-
-          final actualizada = Asistencia(
-            id: existente.id,
-            usuarioId: existente.usuarioId,
-            nombreUsuario: existente.nombreUsuario,
-            sedeId: existente.sedeId,
-            tipoMarcacion: existente.tipoMarcacion,
-            fechaHora: fechaHora ?? existente.fechaHora,
-            latitud: existente.latitud,
-            longitud: existente.longitud,
-            dentroDeZona: existente.dentroDeZona,
-            rostroValidado: existente.rostroValidado,
-            observacion: _combinarObservacionRegularizacion(
-              existente.observacion,
-            ),
-            correoNotificacion: existente.correoNotificacion,
-            urlEvidenciaFacial: existente.urlEvidenciaFacial,
-            notificacionEnviada: existente.notificacionEnviada,
-          );
-          await widget.repositorioAsistencias.registrarAsistencia(actualizada);
-          continue;
-        }
-
-        if (fechaHora == null) {
-          continue;
-        }
-
-        final nueva = Asistencia(
-          id: '',
-          usuarioId: asistencia.usuarioId,
-          nombreUsuario: asistencia.trabajador,
-          sedeId: asistencia.sedeId,
-          tipoMarcacion: horario.tipoMarcacion,
-          fechaHora: fechaHora,
-          latitud: 0,
-          longitud: 0,
-          dentroDeZona: true,
-          rostroValidado: true,
-          observacion: 'Regularizado manualmente desde el panel administrativo.',
-          correoNotificacion: asistencia.correo.isEmpty ? null : asistencia.correo,
-          urlEvidenciaFacial: null,
-          notificacionEnviada: false,
-        );
-        await widget.repositorioAsistencias.registrarAsistencia(nueva);
+      final cambios = _jornada!.preparar({
+        for (final e in _horas.entries) e.key: e.value.text,
+      });
+      setState(() {
+        _guardando = true;
+        _error = null;
+      });
+      await widget.repositorioAsistencias.regularizarJornada(
+        originales: widget.asistencia.originales,
+        actualizadas: cambios,
+      );
+      if (mounted) {
+        Navigator.of(context).pop(true);
       }
-
+    } on FormatException catch (error) {
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      setState(() {
+        _guardando = false;
+        _error = error.message;
+      });
+    } on StateError catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _guardando = false;
+        _error = error.message;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _guardando = false;
+        _error =
+            'No se pudo confirmar el guardado. Cierra el diálogo y actualiza la lista antes de reintentar.';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No se pudo regularizar la jornada. Intenta nuevamente.',
-          ),
-        ),
-      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final asistencia = widget.asistencia;
-
-    return AlertDialog(
-      title: const Text('Regularizar jornada'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Completa o ajusta las horas de la jornada de ${asistencia.trabajador} para el ${asistencia.fecha}.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              _CampoHoraRegularizacion(
-                etiqueta: 'Entrada mañana',
-                controller: _entradaMananaController,
-              ),
-              const SizedBox(height: 12),
-              _CampoHoraRegularizacion(
-                etiqueta: 'Salida mañana',
-                controller: _salidaMananaController,
-              ),
-              const SizedBox(height: 12),
-              _CampoHoraRegularizacion(
-                etiqueta: 'Entrada tarde',
-                controller: _entradaTardeController,
-              ),
-              const SizedBox(height: 12),
-              _CampoHoraRegularizacion(
-                etiqueta: 'Salida tarde',
-                controller: _salidaTardeController,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Usa formato 24 horas, por ejemplo 07:30 o 16:30.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: ColoresSistema.textoSecundario,
+    final jornada = _jornada;
+    return PopScope(
+      canPop: !_guardando,
+      child: AlertDialog(
+        title: const Text('Regularizar jornada'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Corrige las horas de ${widget.asistencia.trabajador} del ${widget.asistencia.fecha}.',
+                ),
+                if (jornada != null) ...[
+                  const SizedBox(height: 12),
+                  if (!jornada.horarioConfirmado)
+                    const Text(
+                      'Jornada antigua sin horario identificado: solo se pueden corregir marcas existentes, conservando sus datos.',
                     ),
-              ),
-            ],
+                  for (final campo in jornada.campos) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _horas[jornada.clave(campo)],
+                      enabled:
+                          !_guardando &&
+                          (jornada.horarioConfirmado ||
+                              jornada.existente(campo) != null),
+                      keyboardType: TextInputType.datetime,
+                      decoration: InputDecoration(
+                        labelText: campo.etiqueta.replaceFirst(
+                          'Registrar ',
+                          '',
+                        ),
+                        hintText: 'HH:mm',
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Formato de 24 horas, por ejemplo 08:30 o 18:30. No borres horas existentes.',
+                  ),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
+        actions: [
+          OutlinedButton(
+            onPressed: _guardando ? null : () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: _guardando || jornada == null ? null : _guardar,
+            child: Text(_guardando ? 'Guardando...' : 'Guardar cambios'),
+          ),
+        ],
       ),
-      actions: [
-        OutlinedButton(
-          onPressed: _guardando ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton.icon(
-          onPressed: _guardando ? null : _guardar,
-          icon: _guardando
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.save_outlined),
-          label: Text(_guardando ? 'Guardando...' : 'Guardar cambios'),
-        ),
-      ],
     );
   }
 }
@@ -940,10 +858,7 @@ class _DialogoRegularizacionAsistenciaState
 enum _AccionDetalleAsistencia { regularizar }
 
 class _CampoFiltroAdmin extends StatelessWidget {
-  const _CampoFiltroAdmin({
-    required this.icono,
-    required this.texto,
-  });
+  const _CampoFiltroAdmin({required this.icono, required this.texto});
 
   final IconData icono;
   final String texto;
@@ -968,8 +883,8 @@ class _CampoFiltroAdmin extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: ColoresSistema.textoSuave,
-                  ),
+                color: ColoresSistema.textoSuave,
+              ),
             ),
           ),
         ],
@@ -991,11 +906,11 @@ class _TituloColumna extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            fontSize: 12,
-            color: ColoresSistema.iconoSuave,
-            fontWeight: FontWeight.w800,
-            height: 1.15,
-          ),
+        fontSize: 12,
+        color: ColoresSistema.iconoSuave,
+        fontWeight: FontWeight.w800,
+        height: 1.15,
+      ),
     );
   }
 }
@@ -1031,9 +946,7 @@ class _FilaAsistenciaAdmin extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: ColoresSistema.divisor),
-        ),
+        border: Border(top: BorderSide(color: ColoresSistema.divisor)),
       ),
       child: compacta
           ? Row(
@@ -1042,13 +955,19 @@ class _FilaAsistenciaAdmin extends StatelessWidget {
                   width: 120,
                   child: _CeldaTrabajadorTabla(asistencia: asistencia),
                 ),
+                SizedBox(width: 95, child: _TextoTabla(asistencia.fecha)),
                 SizedBox(
-                  width: 95,
-                  child: _TextoTabla(asistencia.fecha),
+                  width: 85,
+                  child: _TextoTabla(asistencia.entradaManana),
                 ),
-                SizedBox(width: 85, child: _TextoTabla(asistencia.entradaManana)),
-                SizedBox(width: 85, child: _TextoTabla(asistencia.salidaManana)),
-                SizedBox(width: 85, child: _TextoTabla(asistencia.entradaTarde)),
+                SizedBox(
+                  width: 85,
+                  child: _TextoTabla(asistencia.salidaManana),
+                ),
+                SizedBox(
+                  width: 85,
+                  child: _TextoTabla(asistencia.entradaTarde),
+                ),
                 SizedBox(width: 85, child: _TextoTabla(asistencia.salidaTarde)),
                 SizedBox(width: 75, child: _TextoTabla(asistencia.tardanza)),
                 SizedBox(
@@ -1074,19 +993,13 @@ class _FilaAsistenciaAdmin extends StatelessWidget {
                   flex: 2,
                   child: _CeldaTrabajadorTabla(asistencia: asistencia),
                 ),
-                Expanded(
-                  flex: 2,
-                  child: _TextoTabla(asistencia.fecha),
-                ),
+                Expanded(flex: 2, child: _TextoTabla(asistencia.fecha)),
                 Expanded(flex: 1, child: _TextoTabla(asistencia.entradaManana)),
                 Expanded(flex: 1, child: _TextoTabla(asistencia.salidaManana)),
                 Expanded(flex: 1, child: _TextoTabla(asistencia.entradaTarde)),
                 Expanded(flex: 1, child: _TextoTabla(asistencia.salidaTarde)),
                 Expanded(flex: 1, child: _TextoTabla(asistencia.tardanza)),
-                Expanded(
-                  flex: 1,
-                  child: _TextoTabla(asistencia.tiempoLaboral),
-                ),
+                Expanded(flex: 1, child: _TextoTabla(asistencia.tiempoLaboral)),
                 Expanded(
                   flex: 2,
                   child: _ChipEstadoTabla(
@@ -1105,9 +1018,7 @@ class _FilaAsistenciaAdmin extends StatelessWidget {
 }
 
 class _CeldaTrabajadorTabla extends StatelessWidget {
-  const _CeldaTrabajadorTabla({
-    required this.asistencia,
-  });
+  const _CeldaTrabajadorTabla({required this.asistencia});
 
   final _AsistenciaAdminFila asistencia;
 
@@ -1122,10 +1033,10 @@ class _CeldaTrabajadorTabla extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: ColoresSistema.textoTitulo,
-                height: 1.25,
-              ),
+            fontWeight: FontWeight.w700,
+            color: ColoresSistema.textoTitulo,
+            height: 1.25,
+          ),
         ),
       ],
     );
@@ -1133,10 +1044,7 @@ class _CeldaTrabajadorTabla extends StatelessWidget {
 }
 
 class _ChipEstadoTabla extends StatelessWidget {
-  const _ChipEstadoTabla({
-    required this.estado,
-    required this.colorEstado,
-  });
+  const _ChipEstadoTabla({required this.estado, required this.colorEstado});
 
   final String estado;
   final Color colorEstado;
@@ -1155,9 +1063,9 @@ class _ChipEstadoTabla extends StatelessWidget {
           estado,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: colorEstado,
-                fontWeight: FontWeight.w800,
-              ),
+            color: colorEstado,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
     );
@@ -1165,9 +1073,7 @@ class _ChipEstadoTabla extends StatelessWidget {
 }
 
 class _BotonAccionTabla extends StatelessWidget {
-  const _BotonAccionTabla({
-    required this.onVerDetalle,
-  });
+  const _BotonAccionTabla({required this.onVerDetalle});
 
   final VoidCallback onVerDetalle;
 
@@ -1197,18 +1103,15 @@ class _TextoTabla extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: ColoresSistema.textoBase,
-            height: 1.25,
-          ),
+        color: ColoresSistema.textoBase,
+        height: 1.25,
+      ),
     );
   }
 }
 
 class _DatoDetalleAdmin extends StatelessWidget {
-  const _DatoDetalleAdmin({
-    required this.etiqueta,
-    required this.valor,
-  });
+  const _DatoDetalleAdmin({required this.etiqueta, required this.valor});
 
   final String etiqueta;
   final String valor;
@@ -1225,59 +1128,23 @@ class _DatoDetalleAdmin extends StatelessWidget {
             child: Text(
               etiqueta,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: ColoresSistema.textoSecundario,
-                    fontWeight: FontWeight.w800,
-                  ),
+                color: ColoresSistema.textoSecundario,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           Expanded(
             child: Text(
               valor,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: ColoresSistema.textoBase,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: ColoresSistema.textoBase),
             ),
           ),
         ],
       ),
     );
   }
-}
-
-class _CampoHoraRegularizacion extends StatelessWidget {
-  const _CampoHoraRegularizacion({
-    required this.etiqueta,
-    required this.controller,
-  });
-
-  final String etiqueta;
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: TextInputType.datetime,
-      decoration: InputDecoration(
-        labelText: etiqueta,
-        hintText: 'HH:mm',
-      ),
-    );
-  }
-}
-
-class _RegularizacionHorario {
-  const _RegularizacionHorario({
-    required this.etiqueta,
-    required this.valor,
-    required this.existente,
-    required this.tipoMarcacion,
-  });
-
-  final String etiqueta;
-  final String valor;
-  final Asistencia? existente;
-  final TipoMarcacion tipoMarcacion;
 }
 
 class _GrupoAsistenciaAdmin {
@@ -1312,7 +1179,9 @@ class _GrupoAsistenciaAdmin {
     final validaciones = marcaciones;
     final todasDentroZona = validaciones.every((item) => item.dentroDeZona);
     final todasConRostro = validaciones.every((item) => item.rostroValidado);
-    final completa = resumen.manana.completo && resumen.tarde.completo;
+    final completa =
+        !resumen.esNoLaborable &&
+        resumen.tramos.every((tramo) => tramo.completo);
     final observaciones = validaciones
         .map((item) => item.observacion)
         .whereType<String>()
@@ -1322,23 +1191,30 @@ class _GrupoAsistenciaAdmin {
     final fechaOrden = marcaciones.isEmpty
         ? DateTime(1900)
         : marcaciones
-            .map((item) => item.fechaHora)
-            .reduce((actual, siguiente) => actual.isAfter(siguiente) ? actual : siguiente);
+              .map((item) => item.fechaHora)
+              .reduce(
+                (actual, siguiente) =>
+                    actual.isAfter(siguiente) ? actual : siguiente,
+              );
 
-    final estado = !completa
+    final estado = resumen.esNoLaborable
+        ? 'No laborable'
+        : !completa
         ? 'Pendiente'
         : (!todasDentroZona ||
-                !todasConRostro ||
-                observaciones.isNotEmpty ||
-                tieneInconsistenciaSecuencia)
-            ? 'Observada'
-            : 'Correcta';
+              !todasConRostro ||
+              observaciones.isNotEmpty ||
+              tieneInconsistenciaSecuencia)
+        ? 'Observada'
+        : 'Correcta';
 
     return _AsistenciaAdminFila(
       fecha: fecha,
       fechaOrden: fechaOrden,
       usuarioId: usuarioId,
-      trabajador: trabajador.trim().isEmpty ? 'Trabajador sin nombre' : trabajador,
+      trabajador: trabajador.trim().isEmpty
+          ? 'Trabajador sin nombre'
+          : trabajador,
       correo: correo,
       area: area,
       cargo: cargo,
@@ -1347,6 +1223,7 @@ class _GrupoAsistenciaAdmin {
       salidaManana: _formatearHoraMarcacion(resumen.manana.salidaMarcada),
       entradaTarde: _formatearHoraMarcacion(resumen.tarde.entradaMarcada),
       salidaTarde: _formatearHoraMarcacion(resumen.tarde.salidaMarcada),
+      originales: List.unmodifiable(marcaciones),
       entradaMananaRef: resumen.manana.entradaMarcada,
       salidaMananaRef: resumen.manana.salidaMarcada,
       entradaTardeRef: resumen.tarde.entradaMarcada,
@@ -1419,6 +1296,7 @@ class _AsistenciaAdminFila {
     required this.salidaManana,
     required this.entradaTarde,
     required this.salidaTarde,
+    required this.originales,
     required this.entradaMananaRef,
     required this.salidaMananaRef,
     required this.entradaTardeRef,
@@ -1446,6 +1324,7 @@ class _AsistenciaAdminFila {
   final String salidaManana;
   final String entradaTarde;
   final String salidaTarde;
+  final List<Asistencia> originales;
   final Asistencia? entradaMananaRef;
   final Asistencia? salidaMananaRef;
   final Asistencia? entradaTardeRef;
@@ -1524,65 +1403,4 @@ String _formatearDuracionOpcional(Duration? duracion) {
     return '--';
   }
   return _formatearDuracion(duracion);
-}
-
-String _textoHoraEditable(Asistencia? marcacion) {
-  if (marcacion == null) {
-    return '';
-  }
-  return _formatearHora(marcacion.fechaHora);
-}
-
-DateTime? _parsearHoraEnFechaRegularizacion(
-  DateTime fechaBase,
-  String valor,
-  String etiqueta,
-) {
-  final coincidencia = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(valor.trim());
-  if (coincidencia == null) {
-    return null;
-  }
-
-  var hora = int.tryParse(coincidencia.group(1)!);
-  final minuto = int.tryParse(coincidencia.group(2)!);
-  if (hora == null || minuto == null) {
-    return null;
-  }
-
-  if (hora < 0 || hora > 23 || minuto < 0 || minuto > 59) {
-    return null;
-  }
-
-  final etiquetaNormalizada = etiqueta.toLowerCase();
-
-  if (etiquetaNormalizada.contains('tarde') && hora < 12) {
-    hora += 12;
-  }
-
-  if (etiquetaNormalizada == 'salida mañana' && hora >= 1 && hora <= 6) {
-    hora += 12;
-  }
-
-  return DateTime(
-    fechaBase.year,
-    fechaBase.month,
-    fechaBase.day,
-    hora,
-    minuto,
-  );
-}
-
-String _combinarObservacionRegularizacion(String? observacionActual) {
-  const nota = 'Regularizado manualmente desde el panel administrativo.';
-  final actual = observacionActual?.trim() ?? '';
-
-  if (actual.isEmpty) {
-    return nota;
-  }
-
-  if (actual.contains(nota)) {
-    return actual;
-  }
-
-  return '$actual | $nota';
 }
