@@ -47,8 +47,8 @@ class PerfilTrabajadorActual {
       usuarioId: usuarioId,
       nombreCompleto:
           (nombreCompleto != null && nombreCompleto.trim().isNotEmpty)
-              ? nombreCompleto.trim()
-              : 'Trabajador',
+          ? nombreCompleto.trim()
+          : 'Trabajador',
       rolOCargo: 'Trabajador',
       area: '',
       cargo: 'Trabajador',

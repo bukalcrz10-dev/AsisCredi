@@ -6,10 +6,12 @@ class ItemMenuAdmin {
     required this.titulo,
     required this.descripcion,
     required this.icono,
+    this.grupoId,
   });
 
   final String id;
   final String titulo;
   final String descripcion;
   final IconData icono;
+  final String? grupoId;
 }

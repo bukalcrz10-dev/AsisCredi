@@ -6,18 +6,23 @@ import '../fuentes_datos/fuente_datos_detector_rostro_mlkit.dart';
 // Mantiene concentrada la dependencia externa fuera del dominio.
 class RepositorioReconocimientoFacialImpl
     implements RepositorioReconocimientoFacial {
-  RepositorioReconocimientoFacialImpl(this._fuenteDatos);
+  RepositorioReconocimientoFacialImpl(this._fuenteDatos)
+    : _validarSeguro = null;
+  RepositorioReconocimientoFacialImpl.seguro(this._validarSeguro)
+    : _fuenteDatos = null;
 
-  final FuenteDatosDetectorRostroMlkit _fuenteDatos;
+  final FuenteDatosDetectorRostroMlkit? _fuenteDatos;
+  final Future<ResultadoValidacionFacial> Function(String)? _validarSeguro;
 
   @override
   Future<ResultadoValidacionFacial> validarRostroEnImagen({
     required String rutaImagen,
   }) {
-    return _fuenteDatos.validarRostroEnImagen(rutaImagen: rutaImagen);
+    if (_validarSeguro != null) return _validarSeguro(rutaImagen);
+    return _fuenteDatos!.validarRostroEnImagen(rutaImagen: rutaImagen);
   }
 
   Future<void> cerrar() {
-    return _fuenteDatos.cerrar();
+    return _fuenteDatos?.cerrar() ?? Future.value();
   }
 }

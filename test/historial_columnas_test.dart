@@ -9,6 +9,8 @@ import 'horarios_personal_test.dart' show marca;
 class _Controlador extends Fake implements ControladorAsistencia {
   _Controlador(this.historialFiltrado);
   @override
+  String? errorFechaHistorial;
+  @override
   final List<Asistencia> historialFiltrado;
   @override
   bool get cargandoHistorial => false;
@@ -34,6 +36,19 @@ Future<void> mostrar(WidgetTester tester, List<Asistencia> marcas) =>
   ))));
 
 void main() {
+  testWidgets('fecha inválida muestra aviso sin tabla ni exportaciones', (tester) async {
+    final controlador = _Controlador(jornada(TipoHorarioPersonal.asesor, 7))
+      ..errorFechaHistorial = 'Hay una marcación sin fecha válida.';
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ModuloHistorialTrabajador(
+      controlador: controlador,
+      onSeleccionarFechaInicio: () async {},
+      onSeleccionarFechaFin: () async {},
+      onBuscarRango: () async {},
+    ))));
+    expect(find.text(controlador.errorFechaHistorial!), findsOneWidget);
+    expect(find.text('08:30 AM'), findsNothing);
+    expect(find.byType(IconButton), findsNothing);
+  });
   testWidgets('asesor solo muestra entrada mañana y salida tarde sin huecos de receso', (tester) async {
     await mostrar(tester, jornada(TipoHorarioPersonal.asesor, 7));
     expect(find.text('Entrada mañana'), findsOneWidget);

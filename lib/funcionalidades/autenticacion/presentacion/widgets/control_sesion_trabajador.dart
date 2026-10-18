@@ -128,6 +128,7 @@ class _ControlSesionTrabajadorState extends State<ControlSesionTrabajador>
     behavior: HitTestBehavior.translucent,
     onPointerDown: (_) => _actividad(),
     onPointerMove: (_) => _actividad(),
+    onPointerHover: (_) => _actividad(),
     onPointerSignal: (_) => _actividad(),
     child: Stack(
       children: [

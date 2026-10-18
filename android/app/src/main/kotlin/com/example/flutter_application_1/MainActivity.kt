@@ -12,9 +12,21 @@ import android.widget.Toast
 
 class MainActivity : FlutterActivity() {
     private val abrirInformeRequest = 4801
+    private var canalRostro: CanalRostro? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        canalRostro = CanalRostro(this).also { it.configurar(flutterEngine) }
+        val credencial = CredencialDispositivo(applicationContext)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "crediasciende/dispositivo")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "credencial") result.notImplemented()
+                else try {
+                    result.success(credencial.obtener(call.argument<String>("uid") ?: ""))
+                } catch (_: Exception) {
+                    result.error("dispositivo", "No se pudo abrir la credencial protegida del celular. Solicita una nueva autorización.", null)
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "asistencia/informes")
             .setMethodCallHandler { call, result ->
                 if (call.method != "abrirUbicacion") {
@@ -44,6 +56,7 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    override fun onDestroy() { canalRostro?.cerrar(); super.onDestroy() }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != abrirInformeRequest || resultCode != Activity.RESULT_OK) return

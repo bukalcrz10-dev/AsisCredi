@@ -4,10 +4,13 @@ import '../../../../nucleo/constantes/colecciones_firebase.dart';
 
 // Fuente de datos para recuperar sedes desde Firestore.
 class FuenteDatosSedesFirestore {
-  FuenteDatosSedesFirestore({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  FuenteDatosSedesFirestore({
+    FirebaseFirestore? firestore,
+    this.soloServidor = false,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
+  final bool soloServidor;
 
   Future<List<MapEntry<String, Map<String, dynamic>>>> obtenerSedes() async {
     final consulta = await _firestore
@@ -20,7 +23,11 @@ class FuenteDatosSedesFirestore {
     final documento = await _firestore
         .collection(ColeccionesFirebase.sedes)
         .doc(id)
-        .get();
+        .get(
+          GetOptions(
+            source: soloServidor ? Source.server : Source.serverAndCache,
+          ),
+        );
 
     return documento.data();
   }

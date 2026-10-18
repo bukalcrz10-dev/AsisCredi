@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../app/diseno_sistema.dart';
+import '../controladores/monitor_conexion.dart';
 
 class CabeceraTrabajadorPanel extends StatelessWidget {
   const CabeceraTrabajadorPanel({
@@ -8,17 +9,29 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
     required this.sede,
     required this.fecha,
     required this.hora,
+    this.estadoConexion = EstadoConexion.verificando,
   });
 
   final String nombre;
   final String sede;
   final String fecha;
   final String hora;
+  final EstadoConexion estadoConexion;
 
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final compacto = mediaQuery.orientation == Orientation.landscape;
+    final textoConexion = switch (estadoConexion) {
+      EstadoConexion.verificando => 'Verificando conexión…',
+      EstadoConexion.enLinea => 'En línea',
+      EstadoConexion.sinConexion => 'Sin conexión',
+    };
+    final colorConexion = switch (estadoConexion) {
+      EstadoConexion.verificando => Colors.amber,
+      EstadoConexion.enLinea => ColoresSistema.verdeExito,
+      EstadoConexion.sinConexion => Colors.redAccent,
+    };
 
     return Container(
       width: double.infinity,
@@ -70,27 +83,35 @@ class CabeceraTrabajadorPanel extends StatelessWidget {
                     fontSize: compacto ? 12 : null,
                   ),
                 ),
-                const Spacer(),
-                Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: ColoresSistema.verdeExito,
-                        shape: BoxShape.circle,
-                      ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: colorConexion,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          textoConexion,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                                fontSize: compacto ? 16 : null,
+                              ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'En linea',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                        fontSize: compacto ? 16 : null,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),

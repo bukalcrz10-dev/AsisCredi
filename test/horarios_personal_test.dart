@@ -28,6 +28,17 @@ Asistencia marca(
 );
 
 void main() {
+  test('Auxiliar de operaciones conserva el horario de Plataforma', () {
+    expect(
+      horarioDesdeCargo('Auxiliar de operaciones'),
+      TipoHorarioPersonal.plataforma,
+    );
+    expect(
+      horarioDesdeCargo(' plataforma '),
+      TipoHorarioPersonal.plataforma,
+    );
+  });
+
   test('Plataforma: salida mañana visible y evaluada desde las 13:00', () {
     const horario = TipoHorarioPersonal.plataforma;
     final ventanas = ventanasPara(horario);

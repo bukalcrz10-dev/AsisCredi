@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../funcionalidades/admin/presentacion/widgets/compuerta_admin.dart';
 import '../funcionalidades/autenticacion/presentacion/widgets/compuerta_autenticacion.dart';
 import 'rutas.dart';
 import 'tema.dart';
 import '../funcionalidades/autenticacion/presentacion/widgets/control_sesion_trabajador.dart';
+import '../funcionalidades/autenticacion/presentacion/controladores/sesion_trabajador.dart';
+import '../funcionalidades/admin/presentacion/widgets/control_acceso_admin.dart';
 
 final _navegador = GlobalKey<NavigatorState>();
 
@@ -23,10 +26,21 @@ class Aplicacion extends StatelessWidget {
 
     return MaterialApp(
       navigatorKey: _navegador,
-      builder: kIsWeb ? null : (context, child) => ControlSesionTrabajador(
-        navigatorKey: _navegador, child: child!,
+      builder: (context, child) => ControlSesionTrabajador(
+        navigatorKey: _navegador,
+        sesion: kIsWeb ? SesionTrabajador.administrador : null,
+        child: kIsWeb
+            ? ControlAccesoAdmin(navigatorKey: _navegador, child: child!)
+            : child!,
       ),
       title: 'CREDIASCIENDE',
+      locale: const Locale('es', 'PE'),
+      supportedLocales: const [Locale('es', 'PE')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       debugShowCheckedModeBanner: false,
       // El tema se centraliza en app/tema.dart para que todos los modulos
       // compartan una misma identidad visual desde el inicio.

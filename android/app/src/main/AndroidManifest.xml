@@ -7,7 +7,7 @@
          la validacion facial previa a la marcacion. -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <application
+    <application android:allowBackup="false"
         android:label="CREDIASCIENDE"
         android:name="${applicationName}"
         android:icon="@drawable/ic_crediasciende_circular"

@@ -15,6 +15,7 @@ class ModeloUsuario {
     required this.sedeAsignadaId,
     this.urlFotoFacial,
     this.activo = true,
+    this.fechaInicioLabores,
   });
 
   final String id;
@@ -27,6 +28,7 @@ class ModeloUsuario {
   final String sedeAsignadaId;
   final String? urlFotoFacial;
   final bool activo;
+  final DateTime? fechaInicioLabores;
 
   factory ModeloUsuario.desdeEntidad(Usuario usuario) {
     return ModeloUsuario(
@@ -40,6 +42,7 @@ class ModeloUsuario {
       sedeAsignadaId: usuario.sedeAsignadaId,
       urlFotoFacial: usuario.urlFotoFacial,
       activo: usuario.activo,
+      fechaInicioLabores: usuario.fechaInicioLabores,
     );
   }
 
@@ -55,6 +58,7 @@ class ModeloUsuario {
       sedeAsignadaId: mapa['sedeAsignadaId'] as String? ?? '',
       urlFotoFacial: mapa['urlFotoFacial'] as String?,
       activo: mapa['activo'] as bool? ?? true,
+      fechaInicioLabores: _leerFecha(mapa['fechaInicioLabores']),
     );
   }
 
@@ -70,6 +74,7 @@ class ModeloUsuario {
       sedeAsignadaId: sedeAsignadaId,
       urlFotoFacial: urlFotoFacial,
       activo: activo,
+      fechaInicioLabores: fechaInicioLabores,
     );
   }
 
@@ -84,6 +89,11 @@ class ModeloUsuario {
       'sedeAsignadaId': sedeAsignadaId,
       'urlFotoFacial': urlFotoFacial,
       'activo': activo,
+      if (fechaInicioLabores != null)
+        'fechaInicioLabores': fechaInicioLabores!.toIso8601String().substring(
+          0,
+          10,
+        ),
     };
   }
 
@@ -95,5 +105,15 @@ class ModeloUsuario {
       default:
         return RolUsuario.trabajador;
     }
+  }
+
+  static DateTime? _leerFecha(dynamic valor) {
+    if (valor is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(valor)) {
+      return null;
+    }
+    final fecha = DateTime.tryParse(valor);
+    return fecha != null && fecha.toIso8601String().startsWith(valor)
+        ? fecha
+        : null;
   }
 }

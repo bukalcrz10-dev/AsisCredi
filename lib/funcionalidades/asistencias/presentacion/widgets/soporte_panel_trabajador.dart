@@ -54,9 +54,9 @@ class EtiquetaPanelTrabajador extends StatelessWidget {
         Text(
           titulo.toUpperCase(),
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                letterSpacing: 1.2,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+            letterSpacing: 1.2,
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
         const SizedBox(height: 8),
         if (accion == null)
@@ -78,7 +78,9 @@ class EtiquetaPanelTrabajador extends StatelessWidget {
                   padding: MedidasSistema.paddingBloque,
                   decoration: BoxDecoration(
                     color: ColoresSistema.fondoSuaveAlt,
-                    borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
+                    borderRadius: BorderRadius.circular(
+                      MedidasSistema.radioCampo,
+                    ),
                     border: Border.all(color: ColoresSistema.bordeCampo),
                   ),
                   child: Text(contenido),

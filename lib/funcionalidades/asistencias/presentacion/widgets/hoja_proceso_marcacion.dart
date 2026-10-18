@@ -38,7 +38,7 @@ class HojaProcesoMarcacion extends StatelessWidget {
         final resultadoUbicacion = controlador.resultadoUbicacion;
         final gpsApagado = resultadoUbicacion?.servicioHabilitado == false;
         final horarioDisponible =
-            controlador.horarioAsignado != null &&
+            controlador.tieneHorarioParaHoy &&
             mismoProcesoMarcacion(
               fechaProceso,
               controlador.fechaHoraActual,
@@ -54,6 +54,7 @@ class HojaProcesoMarcacion extends StatelessWidget {
             controlador.tienePerfilCargado &&
             horarioDisponible &&
             !controlador.guardando &&
+            !controlador.confirmacionPendiente &&
             !controlador.validandoUbicacion &&
             !controlador.validandoRostro &&
             controlador.dentroDeZona &&
@@ -148,7 +149,11 @@ class HojaProcesoMarcacion extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       FilledButton.tonalIcon(
-                        onPressed: controlador.validandoRostro
+                        onPressed:
+                            controlador.validandoRostro ||
+                                controlador.validandoUbicacion ||
+                                !controlador.dentroDeZona ||
+                                controlador.guardando
                             ? null
                             : onValidarRostro,
                         icon: const Icon(Icons.camera_alt_outlined),
@@ -177,12 +182,12 @@ class HojaProcesoMarcacion extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Evidencia facial lista',
+                                'Validación facial lista',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'La foto ya fue capturada y esta preparada para la siguiente marcacion.',
+                                controlador.resultadoFacial!.mensajeEstado,
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                             ],
@@ -191,7 +196,7 @@ class HojaProcesoMarcacion extends StatelessWidget {
                       else if (controlador.resultadoFacial == null)
                         const TarjetaMensajePanel(
                           mensaje:
-                              'Aun no hay una evidencia facial capturada para esta accion.',
+                              'Valida tu rostro antes de registrar esta marcación.',
                           color: Colors.orange,
                           icono: Icons.camera_alt_outlined,
                         ),

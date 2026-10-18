@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/diseno_sistema.dart';
-import '../../../usuarios/dominio/entidades/usuario.dart';
 import '../modelos/item_menu_admin.dart';
 
 class SidebarAdmin extends StatelessWidget {
   const SidebarAdmin({
     super.key,
-    this.usuarioAdministrador,
     this.onCerrarSesion,
     required this.items,
     required this.indiceSeleccionado,
     required this.onSeleccionar,
   });
 
-  final Usuario? usuarioAdministrador;
   final Future<void> Function()? onCerrarSesion;
   final List<ItemMenuAdmin> items;
   final int indiceSeleccionado;
@@ -23,37 +20,53 @@ class SidebarAdmin extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 284,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [ColoresPanel.azul, ColoresPanel.turquesa],
-        ),
-      ),
+      width: 216,
+      decoration: const BoxDecoration(color: Color(0xFF123847)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+        padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _MarcaAdmin(),
-            const SizedBox(height: 22),
-            _TarjetaSesionAdmin(usuarioAdministrador: usuarioAdministrador),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
             Expanded(
-              child: ListView.separated(
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
-                itemBuilder: (context, indice) {
-                  final item = items[indice];
-                  final seleccionado = indice == indiceSeleccionado;
-
-                  return _ItemSidebarAdmin(
-                    item: item,
-                    seleccionado: seleccionado,
-                    onTap: () => onSeleccionar(indice),
-                  );
-                },
+              child: ListView(
+                children: [
+                  for (var indice = 0; indice < items.length; indice++)
+                    if (items[indice].grupoId == null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child:
+                            items.any(
+                              (item) => item.grupoId == items[indice].id,
+                            )
+                            ? _GrupoSidebarAdmin(
+                                item: items[indice],
+                                expandido:
+                                    items[indiceSeleccionado].grupoId ==
+                                    items[indice].id,
+                                children: [
+                                  for (
+                                    var hijo = 0;
+                                    hijo < items.length;
+                                    hijo++
+                                  )
+                                    if (items[hijo].grupoId == items[indice].id)
+                                      _ItemSidebarAdmin(
+                                        item: items[hijo],
+                                        seleccionado:
+                                            hijo == indiceSeleccionado,
+                                        onTap: () => onSeleccionar(hijo),
+                                      ),
+                                ],
+                              )
+                            : _ItemSidebarAdmin(
+                                item: items[indice],
+                                seleccionado: indice == indiceSeleccionado,
+                                onTap: () => onSeleccionar(indice),
+                              ),
+                      ),
+                ],
               ),
             ),
             const SizedBox(height: 10),
@@ -62,10 +75,10 @@ class SidebarAdmin extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: onCerrarSesion,
                 icon: const Icon(Icons.logout),
-                label: const Text('Cerrar sesion'),
+                label: const Text('Cerrar sesión'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(
@@ -82,6 +95,39 @@ class SidebarAdmin extends StatelessWidget {
   }
 }
 
+class _GrupoSidebarAdmin extends StatelessWidget {
+  const _GrupoSidebarAdmin({
+    required this.item,
+    required this.expandido,
+    required this.children,
+  });
+
+  final ItemMenuAdmin item;
+  final bool expandido;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    key: PageStorageKey('menu-${item.id}'),
+    initiallyExpanded: expandido,
+    tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+    childrenPadding: const EdgeInsets.only(left: 12),
+    shape: const Border(),
+    collapsedShape: const Border(),
+    iconColor: Colors.white,
+    collapsedIconColor: Colors.white,
+    leading: Icon(item.icono, color: Colors.white, size: 20),
+    title: Text(
+      item.titulo,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        color: Colors.white,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+    children: children,
+  );
+}
+
 class _MarcaAdmin extends StatelessWidget {
   const _MarcaAdmin();
 
@@ -94,7 +140,7 @@ class _MarcaAdmin extends StatelessWidget {
           'CREDIASCIENDE',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
             color: Colors.white,
-            fontSize: 24,
+            fontSize: 18,
             fontWeight: FontWeight.w900,
             letterSpacing: 0.6,
           ),
@@ -108,74 +154,6 @@ class _MarcaAdmin extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _TarjetaSesionAdmin extends StatelessWidget {
-  const _TarjetaSesionAdmin({required this.usuarioAdministrador});
-
-  final Usuario? usuarioAdministrador;
-
-  @override
-  Widget build(BuildContext context) {
-    final nombre = usuarioAdministrador?.nombreCompleto.isNotEmpty == true
-        ? usuarioAdministrador!.nombreCompleto
-        : 'Administrador institucional';
-    final correo = usuarioAdministrador?.correo ?? 'Sesion activa';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(MedidasSistema.radioBloque),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            nombre,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            correo,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.74),
-              fontSize: 12,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  color: ColoresPanel.verde,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Sesion activa',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.84),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
@@ -197,11 +175,9 @@ class _ItemSidebarAdmin extends StatelessWidget {
       borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: seleccionado
-              ? Colors.white.withValues(alpha: 0.16)
-              : Colors.transparent,
+          color: seleccionado ? const Color(0xFF007F8F) : Colors.transparent,
           borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
           border: Border.all(
             color: seleccionado
@@ -212,8 +188,8 @@ class _ItemSidebarAdmin extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: seleccionado
                     ? Colors.white.withValues(alpha: 0.16)
@@ -232,14 +208,6 @@ class _ItemSidebarAdmin extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.descripcion,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.76),
-                      fontSize: 11,
                     ),
                   ),
                 ],

@@ -12,10 +12,36 @@ class InformeHistorial {
   InformeHistorial({
     required this.trabajador,
     required List<ResumenDiaHistorial> dias,
+    this.encabezado = 'Informe de asistencias',
+    this.datosAdicionales = const {},
+    this.archivo,
+    this.mostrarSegundos = false,
+    this.incluirTotalTardanza = false,
   }) : dias = List.unmodifiable(dias);
 
   final String trabajador;
   final List<ResumenDiaHistorial> dias;
+  final String encabezado;
+  final Map<String, String> datosAdicionales;
+  final String? archivo;
+  final bool mostrarSegundos;
+  final bool incluirTotalTardanza;
+
+  String get totalTardanzaTexto {
+    final total = dias.fold(
+      Duration.zero,
+      (suma, dia) => suma + (dia.tardanza ?? Duration.zero),
+    );
+    return '${formatearDuracionPanel(total)}${mostrarSegundos ? ':${(total.inSeconds % 60).toString().padLeft(2, '0')}' : ''}';
+  }
+
+  List<String> _filaTotal(InformeHistorial seccion) {
+    final fila = List.filled(seccion.columnas.length, '');
+    fila[0] = 'TOTAL TARDANZA';
+    fila[seccion.columnas.indexOf('Tardanza')] = totalTardanzaTexto;
+    return fila;
+  }
+
   bool get jornadaContinua =>
       dias.isNotEmpty && dias.every((d) => d.esJornadaContinua);
   List<String> get columnas => [
@@ -42,7 +68,13 @@ class InformeHistorial {
       grupos.last.add(dia);
     }
     return grupos
-        .map((grupo) => InformeHistorial(trabajador: trabajador, dias: grupo))
+        .map(
+          (grupo) => InformeHistorial(
+            trabajador: trabajador,
+            dias: grupo,
+            mostrarSegundos: mostrarSegundos,
+          ),
+        )
         .toList();
   }
 
@@ -53,6 +85,7 @@ class InformeHistorial {
   }
 
   String get nombreArchivo {
+    if (archivo != null) return archivo!;
     if (dias.isEmpty) return 'asistencias';
     final fechas = dias.map((d) => d.fecha).toList()..sort();
     String fecha(DateTime f) =>
@@ -63,8 +96,9 @@ class InformeHistorial {
   List<List<String>> get filas => dias.map((dia) {
     String hora(DateTime? fecha) =>
         fecha == null ? '--:--' : formatearHoraAmPmPanel(fecha);
-    String duracion(Duration? valor) =>
-        valor == null ? '--:--' : formatearDuracionPanel(valor);
+    String duracion(Duration? valor) => valor == null
+        ? '--:--'
+        : '${formatearDuracionPanel(valor)}${mostrarSegundos ? ':${(valor.inSeconds % 60).toString().padLeft(2, '0')}' : ''}';
     return [
       formatearFechaPanel(dia.fecha),
       hora(dia.entradaManana?.fechaHora),
@@ -84,17 +118,59 @@ class InformeHistorial {
     final hoja = libro['Asistencias'];
     libro.delete('Sheet1');
     libro.setDefaultSheet('Asistencias');
+    if (datosAdicionales.isNotEmpty) {
+      for (var columna = 0; columna < 7; columna++) {
+        hoja.setColumnWidth(columna, 21);
+      }
+    }
     void agregar(List<String> valores) =>
         hoja.appendRow(valores.map(TextCellValue.new).toList());
-    agregar(['Informe de asistencias']);
+    agregar([encabezado]);
     agregar(['Trabajador', trabajador]);
+    for (final dato in datosAdicionales.entries) {
+      final fila = hoja.maxRows;
+      agregar([dato.key, dato.value]);
+      hoja.merge(
+        CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: fila),
+        CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: fila),
+      );
+      hoja.setRowHeight(fila, 32);
+      for (final columna in [0, 1]) {
+        hoja
+            .cell(
+              CellIndex.indexByColumnRow(columnIndex: columna, rowIndex: fila),
+            )
+            .cellStyle = CellStyle(
+          bold: columna == 0,
+          textWrapping: TextWrapping.WrapText,
+        );
+      }
+    }
     agregar(['Fechas con registros', periodo]);
     agregar(['Días registrados', dias.length.toString()]);
-    for (final seccion in secciones) {
+    final seccionesInforme = secciones;
+    for (final seccion in seccionesInforme) {
       final filaCabecera = hoja.maxRows;
       agregar(seccion.columnas);
       for (final fila in seccion.filas) {
         agregar(fila);
+      }
+      if (incluirTotalTardanza && identical(seccion, seccionesInforme.last)) {
+        final filaTotal = hoja.maxRows;
+        agregar(_filaTotal(seccion));
+        for (var columna = 0; columna < seccion.columnas.length; columna++) {
+          hoja
+              .cell(
+                CellIndex.indexByColumnRow(
+                  columnIndex: columna,
+                  rowIndex: filaTotal,
+                ),
+              )
+              .cellStyle = CellStyle(
+            bold: true,
+            backgroundColorHex: ExcelColor.fromHexString('#DCEEE9'),
+          );
+        }
       }
       for (var columna = 0; columna < seccion.columnas.length; columna++) {
         hoja.setColumnWidth(columna, 21);
@@ -115,6 +191,7 @@ class InformeHistorial {
   }
 
   Future<Uint8List> generarPdf({PdfPageFormat? formato}) async {
+    final seccionesInforme = secciones;
     final documento = pw.Document();
     documento.addPage(
       pw.MultiPage(
@@ -127,7 +204,7 @@ class InformeHistorial {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
-                'Informe de asistencias',
+                encabezado,
                 style: pw.TextStyle(
                   fontSize: 17,
                   fontWeight: pw.FontWeight.bold,
@@ -135,6 +212,11 @@ class InformeHistorial {
               ),
               pw.SizedBox(height: 5),
               pw.Text('Trabajador: $trabajador'),
+              for (final dato in datosAdicionales.entries)
+                pw.Text(
+                  '${dato.key}: ${dato.value}',
+                  style: const pw.TextStyle(fontSize: 10),
+                ),
               pw.Text(
                 'Fechas con registros: $periodo',
                 style: const pw.TextStyle(fontSize: 10),
@@ -150,10 +232,30 @@ class InformeHistorial {
           ),
         ),
         build: (_) => [
-          for (final seccion in secciones) ...[
+          for (final seccion in seccionesInforme) ...[
             pw.TableHelper.fromTextArray(
               headers: seccion.columnas,
-              data: seccion.filas,
+              data: [
+                ...seccion.filas,
+                if (incluirTotalTardanza &&
+                    identical(seccion, seccionesInforme.last))
+                  _filaTotal(seccion),
+              ],
+              textStyleBuilder: (_, valor, fila) => pw.TextStyle(
+                fontSize: 9,
+                fontWeight:
+                    incluirTotalTardanza &&
+                        identical(seccion, seccionesInforme.last) &&
+                        fila == seccion.dias.length + 1
+                    ? pw.FontWeight.bold
+                    : pw.FontWeight.normal,
+              ),
+              cellDecoration: (_, valor, fila) =>
+                  incluirTotalTardanza &&
+                      identical(seccion, seccionesInforme.last) &&
+                      fila == seccion.dias.length + 1
+                  ? const pw.BoxDecoration(color: PdfColors.green50)
+                  : const pw.BoxDecoration(),
               headerStyle: pw.TextStyle(
                 fontSize: 9,
                 fontWeight: pw.FontWeight.bold,

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../dominio/entidades/asistencia.dart';
+import '../../dominio/entidades/fecha_asistencia_invalida.dart';
 import '../../dominio/entidades/tipo_marcacion.dart';
 
 // Modelo de datos para la coleccion de asistencias en Firebase.
@@ -68,6 +69,9 @@ class ModeloAsistencia {
 
   factory ModeloAsistencia.desdeMapa(Map<String, dynamic> mapa, String id) {
     final timestamp = mapa['fechaHora'];
+    if (timestamp is! Timestamp) {
+      throw FechaAsistenciaInvalida(id);
+    }
 
     return ModeloAsistencia(
       id: id,
@@ -77,7 +81,7 @@ class ModeloAsistencia {
       nombreUsuario: mapa['nombreUsuario'] as String? ?? '',
       sedeId: mapa['sedeId'] as String? ?? '',
       tipoMarcacion: _tipoMarcacionDesdeTexto(mapa['tipoMarcacion'] as String?),
-      fechaHora: timestamp is Timestamp ? timestamp.toDate() : DateTime.now(),
+      fechaHora: timestamp.toDate(),
       latitud: (mapa['latitud'] as num?)?.toDouble() ?? 0,
       longitud: (mapa['longitud'] as num?)?.toDouble() ?? 0,
       dentroDeZona: mapa['dentroDeZona'] as bool? ?? false,

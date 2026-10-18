@@ -15,6 +15,7 @@ class Usuario {
     required this.sedeAsignadaId,
     this.urlFotoFacial,
     this.activo = true,
+    this.fechaInicioLabores,
   });
 
   final String id;
@@ -33,4 +34,5 @@ class Usuario {
   // Campo histórico de fotografía; no se suben fotografías en la versión actual.
   final String? urlFotoFacial;
   final bool activo;
+  final DateTime? fechaInicioLabores;
 }

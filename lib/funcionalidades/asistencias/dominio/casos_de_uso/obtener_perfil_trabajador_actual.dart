@@ -27,7 +27,7 @@ class ObtenerPerfilTrabajadorActual {
   }) async {
     final usuario = await _obtenerUsuarioPorId.ejecutar(usuarioId);
 
-    if (usuario == null) {
+    if (usuario == null || !usuario.activo) {
       return null;
     }
 

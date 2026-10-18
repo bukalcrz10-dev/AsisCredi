@@ -1,155 +1,161 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
-
 import '../../../../app/diseno_sistema.dart';
-import '../modelos/item_menu_admin.dart';
+import '../../../usuarios/dominio/entidades/usuario.dart';
 
-class TopbarAdmin extends StatelessWidget {
-  const TopbarAdmin({super.key, required this.itemActual});
+class TopbarAdmin extends StatefulWidget {
+  const TopbarAdmin({
+    super.key,
+    this.usuarioAdministrador,
+    this.onAbrirMenu,
+    this.menuExpandido = false,
+  });
+  final Usuario? usuarioAdministrador;
+  final VoidCallback? onAbrirMenu;
+  final bool menuExpandido;
 
-  final ItemMenuAdmin itemActual;
+  @override
+  State<TopbarAdmin> createState() => _TopbarAdminState();
+}
+
+class _TopbarAdminState extends State<TopbarAdmin> {
+  DateTime _ahora = DateTime.now();
+  Timer? _temporizador;
+
+  @override
+  void initState() {
+    super.initState();
+    _temporizador = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() => _ahora = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _temporizador?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-      decoration: BoxDecoration(
-        color: ColoresSistema.fondoTarjeta,
-        borderRadius: BorderRadius.circular(MedidasSistema.radioTarjeta),
-        border: Border.all(color: ColoresSistema.bordeSuave),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+    final nombre = widget.usuarioAdministrador?.nombreCompleto.trim();
+    final nombreVisible = nombre == null || nombre.isEmpty
+        ? 'Administrador'
+        : nombre;
+    final correo = widget.usuarioAdministrador?.correo.trim() ?? '';
+    final fecha =
+        '${_ahora.day.toString().padLeft(2, '0')}/${_ahora.month.toString().padLeft(2, '0')}/${_ahora.year}';
+    final jornada = switch (_ahora.weekday) {
+      DateTime.saturday => 'Sábado',
+      DateTime.sunday => 'No laborable',
+      _ => 'Día laborable',
+    };
+    final fechaWidget = Tooltip(
+      message: 'Fecha actual · $jornada',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.calendar_today_outlined,
+            size: 17,
+            color: ColoresPanel.azul,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              fecha,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
+    );
+    final usuarioWidget = Tooltip(
+      message: correo.isEmpty ? nombreVisible : '$nombreVisible\n$correo',
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const CircleAvatar(
+            radius: 15,
+            backgroundColor: ColoresPanel.azul,
+            child: Icon(Icons.person_outline, color: Colors.white, size: 19),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              nombreVisible,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+    final menu = widget.onAbrirMenu == null
+        ? null
+        : IconButton(
+            tooltip: widget.menuExpandido ? 'Ocultar menú' : 'Abrir menú',
+            onPressed: widget.onAbrirMenu,
+            icon: const Icon(Icons.menu),
+          );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: ColoresSistema.divisor)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 560 ||
+              MediaQuery.textScalerOf(context).scale(14) > 21) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  itemActual.titulo,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: ColoresSistema.textoTitulo,
-                  ),
+                Row(
+                  children: [
+                    if (menu != null) ...[menu, const SizedBox(width: 8)],
+                    Flexible(child: fechaWidget),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  itemActual.descripcion,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: ColoresSistema.textoSecundario,
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: math.min(420, constraints.maxWidth),
+                    ),
+                    child: usuarioWidget,
                   ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 18),
-          const _FranjaTopbarAdmin(),
-        ],
-      ),
-    );
-  }
-}
-
-class _FranjaTopbarAdmin extends StatelessWidget {
-  const _FranjaTopbarAdmin();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: ColoresSistema.fondoTarjeta,
-        borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
-        border: Border.all(color: ColoresSistema.bordeIntermedio),
-      ),
-      child: Wrap(
-        alignment: WrapAlignment.start,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 18,
-        runSpacing: 10,
-        children: const [
-          _ItemFranjaTopbarAdmin(
-            icono: Icons.today_outlined,
-            titulo: 'Fecha actual',
-            valor: '24/04/2026',
-          ),
-          _SeparadorFranjaTopbarAdmin(),
-          _ItemFranjaTopbarAdmin(
-            icono: Icons.approval_outlined,
-            titulo: 'Estado',
-            valor: 'Operativo',
-          ),
-          _SeparadorFranjaTopbarAdmin(),
-          _ItemFranjaTopbarAdmin(
-            icono: Icons.domain_verification_outlined,
-            titulo: 'Jornada',
-            valor: 'Dia laborable',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ItemFranjaTopbarAdmin extends StatelessWidget {
-  const _ItemFranjaTopbarAdmin({
-    required this.icono,
-    required this.titulo,
-    required this.valor,
-  });
-
-  final IconData icono;
-  final String titulo;
-  final String valor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icono, size: 18, color: ColoresPanel.turquesa),
-        const SizedBox(width: 10),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titulo,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: ColoresSistema.textoSuave,
-                fontWeight: FontWeight.w700,
+            );
+          }
+          return Row(
+            children: [
+              if (menu != null) ...[menu, const SizedBox(width: 8)],
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: fechaWidget,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              valor,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _SeparadorFranjaTopbarAdmin extends StatelessWidget {
-  const _SeparadorFranjaTopbarAdmin();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 34,
-      color: ColoresSistema.bordeIntermedio,
+              const SizedBox(width: 16),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: math.min(420, constraints.maxWidth * .5),
+                ),
+                child: usuarioWidget,
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

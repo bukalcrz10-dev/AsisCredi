@@ -48,7 +48,10 @@ class RegularizacionJornada {
         : '${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
   }
 
-  List<Asistencia> preparar(Map<String, String> horas) {
+  List<Asistencia> preparar(
+    Map<String, String> horas, {
+    Map<String, String> sedesNuevas = const {},
+  }) {
     final nuevas = <Asistencia>[];
     final resultado = <Asistencia>[];
     final fecha = originales.first.fechaHora;
@@ -87,13 +90,22 @@ class RegularizacionJornada {
         );
       }
       final base = anterior ?? originales.first;
+      final sedes = originales.map((a) => a.sedeId).toSet();
+      final sedeNueva = sedesNuevas[clave(campo)];
+      if (anterior == null &&
+          sedes.length > 1 &&
+          (sedeNueva == null || !sedes.contains(sedeNueva))) {
+        throw const FormatException(
+          'Selecciona la sede de cada marca nueva: esta jornada tiene varias sedes.',
+        );
+      }
       const nota = 'Regularizado manualmente desde el panel administrativo.';
       final observacion = anterior?.observacion?.trim() ?? '';
       final nueva = Asistencia(
         id: anterior?.id ?? '',
         usuarioId: base.usuarioId,
         nombreUsuario: base.nombreUsuario,
-        sedeId: base.sedeId,
+        sedeId: anterior?.sedeId ?? sedeNueva ?? base.sedeId,
         tipoMarcacion: campo.tipo,
         tipoHorario: anterior != null
             ? anterior.tipoHorario

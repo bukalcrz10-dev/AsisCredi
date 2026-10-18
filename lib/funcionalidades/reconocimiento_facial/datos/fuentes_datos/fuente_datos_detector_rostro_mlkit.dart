@@ -7,13 +7,13 @@ import '../../dominio/entidades/resultado_validacion_facial.dart';
 // y consulta cuantos rostros reconoce el detector.
 class FuenteDatosDetectorRostroMlkit {
   FuenteDatosDetectorRostroMlkit()
-      : _detectorRostros = FaceDetector(
-          options: FaceDetectorOptions(
-            enableContours: false,
-            enableClassification: false,
-            performanceMode: FaceDetectorMode.accurate,
-          ),
-        );
+    : _detectorRostros = FaceDetector(
+        options: FaceDetectorOptions(
+          enableContours: false,
+          enableClassification: false,
+          performanceMode: FaceDetectorMode.accurate,
+        ),
+      );
 
   final FaceDetector _detectorRostros;
 

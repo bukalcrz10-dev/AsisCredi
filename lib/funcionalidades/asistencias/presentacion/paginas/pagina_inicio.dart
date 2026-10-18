@@ -4,6 +4,8 @@ import '../../../../app/diseno_sistema.dart';
 
 import '../../../reconocimiento_facial/datos/repositorios/repositorio_reconocimiento_facial_impl.dart';
 import '../../../reconocimiento_facial/presentacion/paginas/pagina_validacion_facial.dart';
+import '../../../reconocimiento_facial/presentacion/paginas/pagina_rostro_seguro.dart';
+import '../../../reconocimiento_facial/seguridad/servicio_seguridad_biometrica.dart';
 import '../../dominio/entidades/tipo_marcacion.dart';
 import '../controladores/controlador_asistencia.dart';
 import '../controladores/fabrica_controlador_asistencia.dart';
@@ -39,6 +41,8 @@ class _PaginaInicioState extends State<PaginaInicio>
   late final RepositorioReconocimientoFacialImpl
   _repositorioReconocimientoFacial;
   int _indice = 0;
+  ServicioSeguridadBiometrica? _seguridad;
+  bool _abriendoMarcacion = false;
 
   @override
   void initState() {
@@ -50,23 +54,35 @@ class _PaginaInicioState extends State<PaginaInicio>
           usuarioAutenticado: widget.usuarioAutenticado,
         );
     _controlador = dependencias.controlador;
+    _seguridad = dependencias.seguridad;
     _repositorioReconocimientoFacial =
         dependencias.repositorioReconocimientoFacial;
 
     // Iniciar antes del primer frame evita mostrar un perfil vacio transitorio.
-    _controlador.cargarPerfil();
+    _recargarPerfil();
+  }
+
+  Future<void> _recargarPerfil() async {
+    _controlador.conexion.iniciar();
+    await _controlador.cargarPerfil();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _controlador.dispose();
+    _seguridad?.limpiar();
     _repositorioReconocimientoFacial.cerrar();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _controlador.conexion.iniciar();
+    } else {
+      _controlador.conexion.pausar();
+    }
     if (state == AppLifecycleState.resumed &&
         _controlador.tienePerfilCargado &&
         !_controlador.validandoUbicacion &&
@@ -78,6 +94,26 @@ class _PaginaInicioState extends State<PaginaInicio>
   }
 
   Future<void> _abrirValidacionFacial() async {
+    if (_seguridad != null) {
+      if (!_controlador.dentroDeZona) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Primero valida tu ubicación dentro de la sede.'),
+          ),
+        );
+        return;
+      }
+      _controlador.limpiarValidacionFacial();
+      final ticket = await Navigator.of(context).push<String>(
+        MaterialPageRoute(
+          builder: (_) => PaginaRostroSeguro(servicio: _seguridad!),
+        ),
+      );
+      if (mounted && ticket != null) {
+        await _controlador.validarRostroConImagen(ticket);
+      }
+      return;
+    }
     final rutaImagen = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const PaginaValidacionFacial()),
     );
@@ -168,22 +204,48 @@ class _PaginaInicioState extends State<PaginaInicio>
   }
 
   Future<void> _abrirProcesoMarcacion(TipoMarcacion tipoMarcacion) async {
-    // Abrimos la hoja de inmediato para que el boton responda rapido
-    // y ejecutamos la validacion de ubicacion en paralelo. Si falta
-    // permiso, Android seguira mostrando su dialogo real.
-    _controlador.validarUbicacion();
+    if (_abriendoMarcacion) return;
+    _abriendoMarcacion = true;
+    try {
+      if (_seguridad != null) {
+        try {
+          await _seguridad!.autorizado();
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  e is ErrorBiometrico
+                      ? e.mensaje
+                      : 'No se pudo confirmar la autorización del celular. Revisa tu conexión.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
+        if (!mounted) return;
+      }
+      _controlador.limpiarValidacionFacial();
+      // Abrimos la hoja de inmediato para que el boton responda rapido
+      // y ejecutamos la validacion de ubicacion en paralelo. Si falta
+      // permiso, Android seguira mostrando su dialogo real.
+      _controlador.validarUbicacion();
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => HojaProcesoMarcacion(
-        controlador: _controlador,
-        tipoMarcacion: tipoMarcacion,
-        fechaProceso: _controlador.fechaHoraActual,
-        onValidarRostro: _abrirValidacionFacial,
-      ),
-    );
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => HojaProcesoMarcacion(
+          controlador: _controlador,
+          tipoMarcacion: tipoMarcacion,
+          fechaProceso: _controlador.fechaHoraActual,
+          onValidarRostro: _abrirValidacionFacial,
+        ),
+      );
+    } finally {
+      _abriendoMarcacion = false;
+    }
   }
 
   Widget _crearVistaActual() {
@@ -202,6 +264,19 @@ class _PaginaInicioState extends State<PaginaInicio>
         );
       default:
         return ModuloPerfilTrabajador(
+          onRostroCelular: _seguridad == null
+              ? null
+              : () async {
+                  _controlador.limpiarValidacionFacial();
+                  await Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => PaginaRostroSeguro(
+                        servicio: _seguridad!,
+                        registrarReferencia: true,
+                      ),
+                    ),
+                  );
+                },
           controlador: _controlador,
           correoSesion: widget.usuarioAutenticado?.email,
           onCerrarSesion: widget.onCerrarSesion,
@@ -215,9 +290,7 @@ class _PaginaInicioState extends State<PaginaInicio>
       actions: [
         IconButton(
           tooltip: 'Actualizar informacion',
-          onPressed: _controlador.cargandoPerfil
-              ? null
-              : () => _controlador.cargarPerfil(),
+          onPressed: _controlador.cargandoPerfil ? null : _recargarPerfil,
           icon: const Icon(Icons.refresh),
         ),
         if (widget.onCerrarSesion != null)
@@ -237,6 +310,7 @@ class _PaginaInicioState extends State<PaginaInicio>
 
     final perfil = _controlador.perfilActual;
     return CabeceraTrabajadorPanel(
+      estadoConexion: _controlador.conexion.estado,
       nombre:
           perfil?.nombreCompleto ??
           widget.usuarioAutenticado?.displayName ??
@@ -273,7 +347,7 @@ class _PaginaInicioState extends State<PaginaInicio>
                       ),
                       const SizedBox(height: 16),
                       FilledButton(
-                        onPressed: _controlador.cargarPerfil,
+                        onPressed: _recargarPerfil,
                         child: const Text('Reintentar'),
                       ),
                     ],

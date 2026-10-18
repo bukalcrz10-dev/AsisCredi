@@ -8,7 +8,7 @@ import 'package:asistencia_app/funcionalidades/usuarios/dominio/repositorios/rep
 import 'package:asistencia_app/funcionalidades/usuarios/dominio/casos_de_uso/obtener_usuario_por_id.dart';
 import 'package:asistencia_app/funcionalidades/asistencias/dominio/casos_de_uso/obtener_perfil_trabajador_actual.dart';
 import 'package:asistencia_app/funcionalidades/asistencias/presentacion/controladores/controlador_asistencia_marcacion_auxiliares.dart';
-import 'package:asistencia_app/funcionalidades/admin/presentacion/widgets/dialogo_sedes_admin.dart';
+import 'package:asistencia_app/funcionalidades/admin/presentacion/widgets/formulario_sedes_admin.dart';
 
 class _Usuarios extends Fake implements RepositorioUsuarios {
   _Usuarios(this.sede);

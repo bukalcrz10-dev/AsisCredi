@@ -25,10 +25,10 @@ class ModuloAsistenciaTrabajador extends StatelessWidget {
         ? 0.0
         : totalCompletados / resumen.tramos.length;
     final textoProgreso = '$totalCompletados/${resumen.tramos.length}';
-    final siguienteTipo = controlador.horarioAsignado == null
+    final siguienteTipo = !controlador.tieneHorarioParaHoy
         ? null
-        : resumen.siguienteTipoMarcacion;
-    final mensajeBloqueo = controlador.horarioAsignado == null
+        : resumen.siguienteTipoMarcacionPara(controlador.fechaHoraActual);
+    final mensajeBloqueo = !controlador.tieneHorarioParaHoy
         ? 'Tu cargo no tiene horario asignado. Solicita revisión al administrador.'
         : resumen.mensajeBloqueoJornada;
 
@@ -117,19 +117,11 @@ class ModuloAsistenciaTrabajador extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (controlador.horarioAsignado != null)
+                if (controlador.tieneHorarioParaHoy)
                   for (final tramo in resumen.tramos) ...[
                     _TarjetaHorarioTramo(tramo: tramo),
                     const SizedBox(height: 6),
                   ],
-                if (resumen.tardanzaTotal != null)
-                  Text(
-                    'Tardanza: ${formatearDuracionPanel(resumen.tardanzaTotal!)}',
-                  ),
-                if (resumen.salidaAnticipadaTotal > Duration.zero)
-                  Text(
-                    'Salida anticipada: ${formatearDuracionPanel(resumen.salidaAnticipadaTotal)}',
-                  ),
                 const SizedBox(height: 8),
                 if (mensajeBloqueo != null)
                   Padding(
@@ -148,7 +140,9 @@ class ModuloAsistenciaTrabajador extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: ColoresPanel.azul),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: ColoresPanel.azul,
+                      ),
                       onPressed: () => onAbrirProcesoMarcacion(siguienteTipo),
                       icon: Icon(
                         siguienteTipo == TipoMarcacion.entrada
@@ -174,9 +168,7 @@ class _TarjetaHorarioTramo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorBase = tramo.completo
-        ? ColoresPanel.verde
-        : ColoresPanel.azul;
+    final colorBase = tramo.completo ? ColoresPanel.verde : ColoresPanel.azul;
 
     return Container(
       width: double.infinity,

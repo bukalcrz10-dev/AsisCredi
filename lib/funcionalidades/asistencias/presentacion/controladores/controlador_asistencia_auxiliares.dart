@@ -17,7 +17,9 @@ TipoHorarioPersonal? horarioDesdeCargo(String cargo) {
   if (valor == 'asesor' || valor == 'asesora') {
     return TipoHorarioPersonal.asesor;
   }
-  if (valor == 'plataforma') return TipoHorarioPersonal.plataforma;
+  if (valor == 'plataforma' || valor == 'auxiliar de operaciones') {
+    return TipoHorarioPersonal.plataforma;
+  }
   return null;
 }
 
@@ -318,8 +320,6 @@ class ResumenJornadaTrabajador {
     return entradaTarde.fechaHora.difference(salidaManana.fechaHora);
   }
 
-  DateTime get _ahora => DateTime.now();
-
   TramoJornadaLaboral tramoPara(BloqueJornada bloque) =>
       bloque == BloqueJornada.manana ? manana : tarde;
 
@@ -385,10 +385,6 @@ class ResumenJornadaTrabajador {
       siguienteVentanaPara(ahora)?.tipo;
   String? siguienteEtiquetaAccionPara(DateTime ahora) =>
       siguienteVentanaPara(ahora)?.etiqueta;
-  TipoMarcacion? get siguienteTipoMarcacion =>
-      siguienteTipoMarcacionPara(_ahora);
-  String? get siguienteEtiquetaAccion => siguienteEtiquetaAccionPara(_ahora);
-  bool get siguienteAccionHabilitada => siguienteTipoMarcacion != null;
 
   DateTime? get proximaHoraHabilitada {
     for (final ventana in ventanas) {
@@ -409,22 +405,11 @@ class ResumenJornadaTrabajador {
     return null;
   }
 
-  String? get mensajeEsperaSiguienteAccion => siguienteAccionHabilitada
-      ? null
-      : 'No hay una marcacion disponible en este horario.';
-
   String? get mensajeBloqueoJornada => esNoLaborable
       ? 'Domingo: día no laborable. No corresponde registrar asistencia.'
       : tramos.any((t) => t.salidaMarcada != null && t.entradaMarcada == null)
       ? 'Hay un turno con salida sin entrada. Solicita revision administrativa.'
       : null;
-}
-
-String formatearFechaControlAsistencia(DateTime fechaHora) {
-  final dia = fechaHora.day.toString().padLeft(2, '0');
-  final mes = fechaHora.month.toString().padLeft(2, '0');
-  final anio = fechaHora.year.toString();
-  return '$dia/$mes/$anio';
 }
 
 String formatearHoraControlAsistencia(DateTime fechaHora) {
@@ -469,18 +454,6 @@ List<Asistencia> filtrarMarcacionesPorRango(
     final fecha = asistencia.fechaHora;
     return !fecha.isBefore(inicio) && !fecha.isAfter(fin);
   }).toList();
-}
-
-Asistencia? obtenerUltimaMarcacionPorTipo(
-  List<Asistencia> historial,
-  TipoMarcacion tipoMarcacion,
-) {
-  for (final asistencia in historial) {
-    if (asistencia.tipoMarcacion == tipoMarcacion) {
-      return asistencia;
-    }
-  }
-  return null;
 }
 
 ResumenJornadaTrabajador construirResumenJornadaTrabajador(

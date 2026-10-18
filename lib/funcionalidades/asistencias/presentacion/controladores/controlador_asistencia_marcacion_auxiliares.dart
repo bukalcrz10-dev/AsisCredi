@@ -1,4 +1,3 @@
-import '../../../alertas/dominio/entidades/tipo_alerta.dart';
 import '../../../geolocalizacion/dominio/entidades/resultado_validacion_ubicacion.dart';
 import '../../../reconocimiento_facial/dominio/entidades/resultado_validacion_facial.dart';
 import '../../dominio/entidades/asistencia.dart';
@@ -7,9 +6,8 @@ import '../../dominio/entidades/tipo_marcacion.dart';
 import 'controlador_asistencia_auxiliares.dart';
 
 class RechazoMarcacion {
-  const RechazoMarcacion({required this.tipoAlerta, required this.mensaje});
+  const RechazoMarcacion({required this.mensaje});
 
-  final TipoAlerta tipoAlerta;
   final String mensaje;
 }
 
@@ -19,7 +17,6 @@ RechazoMarcacion? obtenerRechazoContextoBasicoMarcacion({
 }) {
   if (perfil == null) {
     return const RechazoMarcacion(
-      tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
           'Tu perfil aun no esta listo. Espera unos segundos y vuelve a intentarlo.',
     );
@@ -27,7 +24,6 @@ RechazoMarcacion? obtenerRechazoContextoBasicoMarcacion({
 
   if (perfil.sedeId.isEmpty) {
     return const RechazoMarcacion(
-      tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
           'Tu cuenta no tiene una sede institucional asignada. El administrador debe completar tu perfil antes de registrar asistencia.',
     );
@@ -35,7 +31,6 @@ RechazoMarcacion? obtenerRechazoContextoBasicoMarcacion({
 
   if (perfil.sede == null) {
     return const RechazoMarcacion(
-      tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
           'La sede asignada a tu cuenta no existe en la coleccion de sedes. El administrador debe revisarla antes de registrar asistencia.',
     );
@@ -43,7 +38,6 @@ RechazoMarcacion? obtenerRechazoContextoBasicoMarcacion({
 
   if (!perfil.sede!.activa) {
     return const RechazoMarcacion(
-      tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje: 'Tu sede está inactiva. Solicita revisión al administrador.',
     );
   }
@@ -51,7 +45,6 @@ RechazoMarcacion? obtenerRechazoContextoBasicoMarcacion({
   if (!perfil.radioPermitidoMetros.isFinite ||
       perfil.radioPermitidoMetros <= 0) {
     return const RechazoMarcacion(
-      tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
           'La sede asignada no tiene un radio permitido configurado. El administrador debe completar ese dato antes de registrar asistencia.',
     );
@@ -63,7 +56,6 @@ RechazoMarcacion? obtenerRechazoContextoBasicoMarcacion({
       perfil.longitudSede.abs() > 180 ||
       (perfil.latitudSede == 0 && perfil.longitudSede == 0)) {
     return const RechazoMarcacion(
-      tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
           'La sede asignada no tiene coordenadas validas configuradas. El administrador debe registrar latitud y longitud antes de marcar asistencia.',
     );
@@ -71,7 +63,6 @@ RechazoMarcacion? obtenerRechazoContextoBasicoMarcacion({
 
   if (validandoUbicacion) {
     return const RechazoMarcacion(
-      tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
           'Estamos terminando de validar tu ubicacion. Espera unos segundos antes de confirmar.',
     );
@@ -86,7 +77,6 @@ RechazoMarcacion? obtenerRechazoUbicacionMarcacion({
 }) {
   if (ubicacion == null) {
     return const RechazoMarcacion(
-      tipoAlerta: TipoAlerta.marcacionRechazada,
       mensaje:
           'No pudimos validar tu ubicacion antes de registrar la asistencia.',
     );
@@ -94,9 +84,10 @@ RechazoMarcacion? obtenerRechazoUbicacionMarcacion({
 
   if (!ubicacion.dentroDeZona) {
     return RechazoMarcacion(
-      tipoAlerta: TipoAlerta.fueraDeZona,
       mensaje:
-          'No pudimos registrar tu ${tipoMarcacion.name} porque estas fuera del radio permitido de la sede.',
+          ubicacion.latitudActual == null || ubicacion.longitudActual == null
+          ? ubicacion.mensajeEstado
+          : 'No pudimos registrar tu ${tipoMarcacion.name} porque estas fuera del radio permitido de la sede.',
     );
   }
 
@@ -110,7 +101,6 @@ RechazoMarcacion? obtenerRechazoRostroMarcacion({
 }) {
   if (resultadoFacial == null) {
     return RechazoMarcacion(
-      tipoAlerta: TipoAlerta.rostroNoValido,
       mensaje:
           'Antes de registrar tu ${tipoMarcacion.name}, primero valida tu rostro.',
     );
@@ -118,7 +108,6 @@ RechazoMarcacion? obtenerRechazoRostroMarcacion({
 
   if (!rostroValidado) {
     return RechazoMarcacion(
-      tipoAlerta: TipoAlerta.rostroNoValido,
       mensaje:
           'No pudimos registrar tu ${tipoMarcacion.name} porque la validacion facial no fue correcta.',
     );
@@ -127,7 +116,6 @@ RechazoMarcacion? obtenerRechazoRostroMarcacion({
   final rutaImagenFacial = resultadoFacial.rutaImagenCapturada;
   if (rutaImagenFacial == null || rutaImagenFacial.isEmpty) {
     return RechazoMarcacion(
-      tipoAlerta: TipoAlerta.rostroNoValido,
       mensaje:
           'La validacion facial quedo incompleta. Toma nuevamente la foto antes de marcar.',
     );
@@ -149,12 +137,7 @@ RechazoMarcacion? obtenerRechazoReglaDiariaMarcacion({
     tipoHorario: tipoHorario,
   );
   final mensaje = resumen.rechazoMarcacionPara(tipoMarcacion, instante);
-  return mensaje == null
-      ? null
-      : RechazoMarcacion(
-          tipoAlerta: TipoAlerta.marcacionRechazada,
-          mensaje: mensaje,
-        );
+  return mensaje == null ? null : RechazoMarcacion(mensaje: mensaje);
 }
 
 Asistencia crearAsistenciaTrabajador({

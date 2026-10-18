@@ -66,6 +66,7 @@ void main() {
       expect(db.datos['nuevo']!.containsKey('password'), false);
       expect(auxiliar.salidas, 1);
       expect(liberada, true);
+      expect(db.datos.keys.toSet(), {'admin', 'nuevo'});
     },
   );
   test('no crea cuentas si el operador no es administrador activo', () async {
@@ -109,6 +110,10 @@ void main() {
         'activo': true,
       };
       await editar();
+      expect(
+        db.datos.values.any((d) => d['tipo'] == 'editar_trabajador'),
+        isFalse,
+      );
       expect(db.datos['nuevo']?['activo'], false);
       expect(db.datos['nuevo']?['cargo'], 'Plataforma');
       expect(db.datos['nuevo']?['sedeAsignadaId'], 'huancayo');
@@ -206,6 +211,7 @@ class _Credencial extends Fake implements UserCredential {
 
 class _Db extends Fake implements FirebaseFirestore {
   final datos = <String, Map<String, dynamic>>{};
+  int siguienteAuditoria = 0;
   bool falla = false;
   @override
   CollectionReference<Map<String, dynamic>> collection(String collectionPath) =>
@@ -229,7 +235,7 @@ class _Coleccion extends Fake
   final _Db db;
   @override
   DocumentReference<Map<String, dynamic>> doc([String? path]) =>
-      _Documento(db, path!);
+      _Documento(db, path ?? 'auditoria-${db.siguienteAuditoria++}');
 }
 
 class _Documento extends Fake

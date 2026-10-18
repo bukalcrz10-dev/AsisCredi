@@ -1,602 +1,624 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/diseno_sistema.dart';
 import '../../../asistencias/datos/fuentes_datos/fuente_datos_asistencias_firestore.dart';
 import '../../../asistencias/datos/repositorios/repositorio_asistencias_impl.dart';
-import '../../../asistencias/dominio/entidades/asistencia.dart';
-import '../../../asistencias/dominio/entidades/tipo_marcacion.dart';
+import '../../../sedes/datos/fuentes_datos/fuente_datos_sedes_firestore.dart';
+import '../../../sedes/datos/modelos/modelo_sede.dart';
 import '../../../usuarios/datos/fuentes_datos/fuente_datos_usuarios_firestore.dart';
 import '../../../usuarios/datos/repositorios/repositorio_usuarios_impl.dart';
-import '../../../usuarios/dominio/entidades/rol_usuario.dart';
-import '../../../usuarios/dominio/entidades/usuario.dart';
+import '../../datos/servicios/servicio_dashboard_admin.dart';
+import '../modelos/resumen_dashboard_admin.dart';
+import 'cuadricula_admin.dart';
+import 'indicador_dashboard_admin.dart';
+
+const _tinta = Color(0xFF153B49);
+const _teal = Color(0xFF008499);
+const _verde = Color(0xFF16805D);
+const _ambar = Color(0xFFAB641A);
 
 class ModuloDashboardAdmin extends StatefulWidget {
-  const ModuloDashboardAdmin({super.key});
+  const ModuloDashboardAdmin({
+    super.key,
+    this.cargarDatos,
+    this.onAbrirTrabajador,
+    this.onAbrirSedes,
+  });
+  final Future<ResumenDashboardAdmin> Function()? cargarDatos;
+  final ValueChanged<String>? onAbrirTrabajador;
+  final VoidCallback? onAbrirSedes;
 
   @override
   State<ModuloDashboardAdmin> createState() => _ModuloDashboardAdminState();
 }
 
+enum _Filtro { incompletas, observadas, sinMarcas, configuracion }
+
 class _ModuloDashboardAdminState extends State<ModuloDashboardAdmin> {
-  late final RepositorioAsistenciasImpl _repositorioAsistencias;
-  late final RepositorioUsuariosImpl _repositorioUsuarios;
-  late Future<_DashboardAdminData> _cargaDashboard;
+  late Future<ResumenDashboardAdmin> _carga;
+  _Filtro _filtro = _Filtro.incompletas;
+  int _limite = 6;
 
   @override
   void initState() {
     super.initState();
-    _repositorioAsistencias = RepositorioAsistenciasImpl(
-      FuenteDatosAsistenciasFirestore(),
-    );
-    _repositorioUsuarios = RepositorioUsuariosImpl(
-      FuenteDatosUsuariosFirestore(),
-    );
-    _cargaDashboard = _cargarDashboard();
+    _carga = _cargar();
   }
 
-  Future<_DashboardAdminData> _cargarDashboard() async {
-    final usuarios = await _repositorioUsuarios.obtenerUsuarios();
-    final asistencias = await _repositorioAsistencias.obtenerAsistencias();
-
-    final usuariosPorId = <String, Usuario>{
-      for (final usuario in usuarios) usuario.id: usuario,
-    };
-
-    final hoy = DateTime.now();
-    final grupos = <String, _GrupoDashboardAdmin>{};
-
-    for (final asistencia in asistencias) {
-      final fechaClave = _formatearFecha(asistencia.fechaHora);
-      final clave = '${asistencia.usuarioId}|$fechaClave';
-      final usuario = usuariosPorId[asistencia.usuarioId];
-
-      final grupo = grupos.putIfAbsent(
-        clave,
-        () => _GrupoDashboardAdmin(
-          usuarioId: asistencia.usuarioId,
-          fechaTexto: fechaClave,
-          fechaOrden: DateTime(
-            asistencia.fechaHora.year,
-            asistencia.fechaHora.month,
-            asistencia.fechaHora.day,
-          ),
-          trabajador: usuario?.nombreCompleto.trim().isNotEmpty == true
-              ? usuario!.nombreCompleto
-              : asistencia.nombreUsuario,
-          correo: usuario?.correo ?? asistencia.correoNotificacion ?? '',
-        ),
-      );
-
-      grupo.marcaciones.add(asistencia);
-      if (asistencia.tipoMarcacion == TipoMarcacion.entrada) {
-        if (grupo.entrada == null ||
-            asistencia.fechaHora.isBefore(grupo.entrada!.fechaHora)) {
-          grupo.entrada = asistencia;
-        }
-      } else {
-        if (grupo.salida == null ||
-            asistencia.fechaHora.isAfter(grupo.salida!.fechaHora)) {
-          grupo.salida = asistencia;
-        }
-      }
-    }
-
-    final filas = grupos.values.map((grupo) => grupo.aFila()).toList()
-      ..sort((a, b) => b.fechaEvento.compareTo(a.fechaEvento));
-
-    final filasHoy = filas
-        .where((fila) => _mismaFecha(fila.fechaOrden, hoy))
-        .toList();
-    final trabajadoresActivos = usuarios
-        .where(
-          (usuario) => usuario.activo && usuario.rol == RolUsuario.trabajador,
-        )
-        .length;
-
-    final actividadReciente = filas.take(4).map(_crearActividad).toList();
-
-    return _DashboardAdminData(
-      trabajadoresActivos: trabajadoresActivos,
-      asistenciasHoy: filasHoy.length,
-      pendientesHoy: filasHoy
-          .where((fila) => fila.estado == 'Pendiente')
-          .length,
-      observadasHoy: filasHoy
-          .where((fila) => fila.estado == 'Observada')
-          .length,
-      actividadReciente: actividadReciente,
+  Future<ResumenDashboardAdmin> _cargar() async {
+    if (widget.cargarDatos != null) return widget.cargarDatos!();
+    final ahora = DateTime.now();
+    final (usuarios, marcas, documentosSedes) = await (
+      RepositorioUsuariosImpl(FuenteDatosUsuariosFirestore()).obtenerUsuarios(),
+      cargarMarcacionesDashboard(
+        RepositorioAsistenciasImpl(FuenteDatosAsistenciasFirestore()),
+        ahora,
+      ),
+      FuenteDatosSedesFirestore().obtenerSedes(),
+    ).wait;
+    return ResumenDashboardAdmin(
+      actualizadoEn: ahora,
+      usuarios: usuarios,
+      marcaciones: marcas,
+      sedes: documentosSedes
+          .map((s) => ModeloSede.desdeMapa(s.value, s.key).aEntidad())
+          .toList(),
     );
   }
 
-  _ActividadDashboard _crearActividad(_FilaDashboardAdmin fila) {
-    if (fila.estado == 'Pendiente') {
-      return _ActividadDashboard(
-        titulo: '${fila.trabajador} mantiene salida pendiente',
-        detalle:
-            'El registro del dia continua abierto y requiere cierre de jornada.',
-        etiqueta: 'Pendiente',
-        colorAcento: ColoresPanel.turquesa,
-      );
-    }
-
-    if (fila.estado == 'Observada') {
-      return _ActividadDashboard(
-        titulo: '${fila.trabajador} presenta observacion',
-        detalle: fila.detalle,
-        etiqueta: 'Observada',
-        colorAcento: const Color(0xFFB66A18),
-      );
-    }
-
-    final hora = fila.entrada != '--:--'
-        ? fila.entrada
-        : _formatearHora(fila.fechaEvento);
-    return _ActividadDashboard(
-      titulo: '${fila.trabajador} registro entrada',
-      detalle: 'Entrada validada a las $hora en la sede principal.',
-      etiqueta: hora,
-      colorAcento: ColoresPanel.azul,
-    );
-  }
-
-  void _recargarDashboard() {
-    setState(() {
-      _cargaDashboard = _cargarDashboard();
-    });
-  }
+  void _actualizar() => setState(() {
+    _carga = _cargar();
+  });
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<_DashboardAdminData>(
-      future: _cargaDashboard,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: CircularProgressIndicator(),
+  Widget build(BuildContext context) => FutureBuilder<ResumenDashboardAdmin>(
+    future: _carga,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const _Tarjeta(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(
+              child: CircularProgressIndicator(
+                semanticsLabel: 'Cargando Dashboard',
+              ),
             ),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return _TarjetaDashboardAdmin(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Indicadores principales',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'No se pudieron cargar los datos reales del panel administrativo.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: ColoresSistema.textoSecundario,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '${snapshot.error}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: ColoresSistema.rojoInstitucionalOscuro,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                FilledButton.icon(
-                  onPressed: _recargarDashboard,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Reintentar'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final datos = snapshot.data ?? const _DashboardAdminData.vacio();
-
-        return _TarjetaDashboardAdmin(
+          ),
+        );
+      }
+      if (snapshot.hasError || !snapshot.hasData) {
+        return _Tarjeta(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Indicadores principales',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Cifras generales y actividad reciente con datos reales del sistema.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: ColoresSistema.textoSecundario,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Wrap(
-                spacing: 14,
-                runSpacing: 14,
-                children: [
-                  _IndicadorDashboardAdmin(
-                    colorAcento: ColoresPanel.azul,
-                    icono: Icons.groups_2_outlined,
-                    etiqueta: 'Personal habilitado',
-                    titulo: 'Trabajadores activos',
-                    valor: '${datos.trabajadoresActivos}',
-                  ),
-                  _IndicadorDashboardAdmin(
-                    colorAcento: ColoresPanel.verde,
-                    icono: Icons.fact_check_outlined,
-                    etiqueta: 'Registros del dia',
-                    titulo: 'Asistencias de hoy',
-                    valor: '${datos.asistenciasHoy}',
-                  ),
-                  _IndicadorDashboardAdmin(
-                    colorAcento: const Color(0xFF8A5C2A),
-                    icono: Icons.pending_actions_outlined,
-                    etiqueta: 'Casos por cerrar',
-                    titulo: 'Pendientes',
-                    valor: _dosDigitos(datos.pendientesHoy),
-                  ),
-                  _IndicadorDashboardAdmin(
-                    colorAcento: const Color(0xFFB66A18),
-                    icono: Icons.warning_amber_outlined,
-                    etiqueta: 'Requieren revision',
-                    titulo: 'Observadas',
-                    valor: _dosDigitos(datos.observadasHoy),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Container(
-                width: double.infinity,
-                height: 1,
-                color: ColoresSistema.divisor,
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Actividad reciente',
-                textAlign: TextAlign.left,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Movimientos recientes para seguimiento rapido del administrador.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: ColoresSistema.textoSecundario,
-                ),
-              ),
+              const _Titulo('No se pudo cargar el Dashboard'),
+              const SizedBox(height: 8),
+              const Text('Comprueba tu conexión y vuelve a intentarlo.'),
               const SizedBox(height: 16),
-              ...datos.actividadReciente.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _FilaActividadDashboard(item: item),
-                ),
+              FilledButton.icon(
+                onPressed: _actualizar,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar'),
               ),
             ],
           ),
         );
-      },
-    );
-  }
-}
-
-class _TarjetaDashboardAdmin extends StatelessWidget {
-  const _TarjetaDashboardAdmin({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: ColoresSistema.fondoTarjeta,
-        borderRadius: BorderRadius.circular(MedidasSistema.radioTarjeta),
-        border: Border.all(color: ColoresSistema.bordeSuave),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _IndicadorDashboardAdmin extends StatelessWidget {
-  const _IndicadorDashboardAdmin({
-    required this.colorAcento,
-    required this.icono,
-    required this.etiqueta,
-    required this.titulo,
-    required this.valor,
-  });
-
-  final Color colorAcento;
-  final IconData icono;
-  final String etiqueta;
-  final String titulo;
-  final String valor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 260,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: ColoresSistema.fondoTarjeta,
-        borderRadius: BorderRadius.circular(MedidasSistema.radioBloque),
-        border: Border.all(color: ColoresSistema.bordeSuave),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      }
+      final datos = snapshot.requireData;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: colorAcento.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icono, color: colorAcento, size: 20),
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: ColoresSistema.fondoChip,
-                borderRadius: BorderRadius.circular(MedidasSistema.radioChip),
+          Row(
+            children: [
+              const Expanded(child: _Titulo('Indicadores de hoy')),
+              IconButton(
+                tooltip: 'Actualizar Dashboard',
+                onPressed: _actualizar,
+                icon: const Icon(Icons.refresh, color: _teal),
               ),
-              child: Text(
-                etiqueta,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: ColoresSistema.textoSecundario,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            titulo,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: ColoresSistema.textoTitulo,
-            ),
+            ],
           ),
           const SizedBox(height: 8),
-          Text(
-            valor,
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: ColoresSistema.textoTitulo,
-            ),
+          CuadriculaAdmin(
+            maximoColumnas: 4,
+            children: [
+              IndicadorDashboardAdmin(
+                colorAcento: _teal,
+                icono: Icons.how_to_reg_outlined,
+                titulo: 'Con marcaciones hoy',
+                valor: '${datos.conMarcaciones}',
+                etiqueta:
+                    'Trabajadores activos que ya iniciaron labores y tienen al menos una marca hoy.',
+              ),
+              IndicadorDashboardAdmin(
+                colorAcento: const Color(0xFF537184),
+                icono: Icons.person_search_outlined,
+                titulo: 'Sin marcaciones hoy',
+                valor: datos.esDomingo
+                    ? 'No aplica'
+                    : '${datos.sinMarcaciones.length}',
+                etiqueta:
+                    'No equivale a una falta. Excluye altas con inicio de labores futuro. Los domingos no aplica.',
+              ),
+              IndicadorDashboardAdmin(
+                colorAcento: _ambar,
+                icono: Icons.pending_actions_outlined,
+                titulo: 'Jornadas incompletas',
+                valor: '${datos.incompletas.length}',
+                etiqueta:
+                    'Jornadas de hoy a las que aún les faltan marcaciones. Pueden estar en curso.',
+              ),
+              IndicadorDashboardAdmin(
+                colorAcento: const Color(0xFFC06136),
+                icono: Icons.rule_outlined,
+                titulo: 'Jornadas observadas',
+                valor: '${datos.observadas.length}',
+                etiqueta:
+                    'Jornadas completas de hoy con incidencias de horario, ubicación o rostro.',
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilaActividadDashboard extends StatelessWidget {
-  const _FilaActividadDashboard({required this.item});
-
-  final _ActividadDashboard item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: ColoresSistema.fondoTarjeta,
-        borderRadius: BorderRadius.circular(MedidasSistema.radioBloque),
-        border: Border.all(color: ColoresSistema.bordeSuave),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 5,
-            height: 44,
-            decoration: BoxDecoration(
-              color: item.colorAcento,
-              borderRadius: BorderRadius.circular(999),
-            ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, medidas) {
+              final revision = _revision(context, datos);
+              final sedes = _sedes(context, datos);
+              if (medidas.maxWidth < 1080 ||
+                  MediaQuery.textScalerOf(context).scale(14) > 19) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [revision, const SizedBox(height: 16), sedes],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 3, child: revision),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 2, child: sedes),
+                ],
+              );
+            },
           ),
-          const SizedBox(width: 12),
-          Expanded(
+          const SizedBox(height: 16),
+          _Tarjeta(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  item.titulo,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: ColoresSistema.textoTitulo,
-                  ),
+                const _Titulo(
+                  'Últimas jornadas',
+                  subtitulo:
+                      'Historial reciente · última marcación de cada jornada',
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  item.detalle,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: ColoresSistema.textoSecundario,
-                  ),
-                ),
+                const SizedBox(height: 12),
+                if (datos.jornadas.isEmpty)
+                  const _Vacio(
+                    icono: Icons.history_rounded,
+                    texto: 'Todavía no hay jornadas registradas.',
+                  )
+                else
+                  for (final jornada in datos.jornadas.take(4))
+                    _Fila(
+                      nombre: jornada.nombre,
+                      detalle:
+                          '${_fecha(jornada.ultimaMarca)} · ${_hora(jornada.ultimaMarca)} · ${jornada.sede}',
+                      estado: jornada.estado,
+                      color: jornada.estado == 'Correcta'
+                          ? _verde
+                          : jornada.estado == 'Observada'
+                          ? _ambar
+                          : _teal,
+                      onAbrir: jornada.usuarioDisponible
+                          ? _abrir(jornada.usuarioId)
+                          : null,
+                    ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: ColoresSistema.fondoChip,
-              borderRadius: BorderRadius.circular(MedidasSistema.radioChip),
+        ],
+      );
+    },
+  );
+
+  VoidCallback? _abrir(String id) => widget.onAbrirTrabajador == null
+      ? null
+      : () => widget.onAbrirTrabajador!(id);
+
+  Widget _revision(BuildContext context, ResumenDashboardAdmin datos) {
+    final cantidades = <_Filtro, int>{
+      _Filtro.incompletas: datos.incompletas.length,
+      _Filtro.observadas: datos.observadas.length,
+      _Filtro.sinMarcas: datos.sinMarcaciones.length,
+      _Filtro.configuracion: datos.configuracion.length,
+    };
+    final etiquetas = <_Filtro, String>{
+      _Filtro.incompletas: 'Incompletas',
+      _Filtro.observadas: 'Observadas',
+      _Filtro.sinMarcas: 'Sin marcaciones',
+      _Filtro.configuracion: 'Configuración',
+    };
+    final filas = <Widget>[];
+    switch (_filtro) {
+      case _Filtro.incompletas:
+      case _Filtro.observadas:
+        for (final j
+            in (_filtro == _Filtro.incompletas
+                    ? datos.incompletas
+                    : datos.observadas)
+                .take(_limite)) {
+          filas.add(
+            _Fila(
+              nombre: j.nombre,
+              detalle: '${j.sede} · Última marca ${_hora(j.ultimaMarca)}',
+              explicacion: _filtro == _Filtro.observadas
+                  ? j.evaluacion.incidencias.join(' ')
+                  : null,
+              color: _ambar,
+              onAbrir: j.usuarioDisponible ? _abrir(j.usuarioId) : null,
             ),
-            child: Text(
-              item.etiqueta,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: ColoresSistema.textoSecundario,
-                fontWeight: FontWeight.w700,
-              ),
+          );
+        }
+      case _Filtro.sinMarcas:
+        for (final u in datos.sinMarcaciones.take(_limite)) {
+          filas.add(
+            _Fila(
+              nombre: u.nombreCompleto,
+              detalle: u.correo,
+              color: _teal,
+              onAbrir: _abrir(u.id),
             ),
+          );
+        }
+      case _Filtro.configuracion:
+        for (final c in datos.configuracion.take(_limite)) {
+          filas.add(
+            _Fila(
+              nombre: c.usuario.nombreCompleto,
+              detalle: c.motivo,
+              color: _ambar,
+              onAbrir: _abrir(c.usuario.id),
+            ),
+          );
+        }
+    }
+    return _Tarjeta(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _Titulo(
+            'Seguimiento de hoy',
+            subtitulo: 'Revisa las marcaciones y los datos del personal',
           ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final filtro in _Filtro.values)
+                ChoiceChip(
+                  label: Text('${etiquetas[filtro]} · ${cantidades[filtro]}'),
+                  selected: _filtro == filtro,
+                  showCheckmark: false,
+                  onSelected: (_) => setState(() {
+                    _filtro = filtro;
+                    _limite = 6;
+                  }),
+                  labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _filtro == filtro ? _teal : const Color(0xFF586E77),
+                  ),
+                  selectedColor: const Color(0xFFE6F3F5),
+                  backgroundColor: const Color(0xFFF7FAFB),
+                  side: BorderSide(
+                    color: _filtro == filtro
+                        ? const Color(0xFF9BCDD5)
+                        : const Color(0xFFE0EAEE),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (filas.isEmpty)
+            _Vacio(
+              icono: Icons.task_alt_rounded,
+              texto: switch (_filtro) {
+                _Filtro.incompletas => 'No hay jornadas incompletas hoy.',
+                _Filtro.observadas => 'No hay jornadas observadas hoy.',
+                _Filtro.sinMarcas =>
+                  datos.esDomingo
+                      ? 'Este seguimiento no aplica los domingos.'
+                      : 'No hay trabajadores sin marcaciones hoy.',
+                _Filtro.configuracion =>
+                  'No se detectaron cargos ni sedes por revisar.',
+              },
+            )
+          else
+            ...filas,
+          if (cantidades[_filtro]! > _limite)
+            TextButton(
+              onPressed: () => setState(() => _limite += 6),
+              child: Text('Mostrar más (${cantidades[_filtro]! - _limite})'),
+            ),
+          const SizedBox(height: 10),
+          Text(switch (_filtro) {
+            _Filtro.incompletas =>
+              'Una jornada en curso puede tener marcaciones pendientes.',
+            _Filtro.observadas =>
+              'Las observaciones consideran horario, ubicación y rostro.',
+            _Filtro.sinMarcas =>
+              'Sin marcaciones no equivale a una falta. Revisa permisos y justificaciones.',
+            _Filtro.configuracion =>
+              'Se revisan los cargos y las sedes del personal activo.',
+          }, style: const TextStyle(fontSize: 12, color: Color(0xFF647E88))),
         ],
       ),
     );
   }
+
+  Widget _sedes(BuildContext context, ResumenDashboardAdmin datos) => _Tarjeta(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _Titulo(
+                'Cobertura por sede',
+                subtitulo: 'Personal asignado con alguna marcación hoy',
+              ),
+            ),
+            if (widget.onAbrirSedes != null)
+              IconButton(
+                tooltip: 'Configurar sedes',
+                onPressed: widget.onAbrirSedes,
+                icon: const Icon(Icons.tune_rounded, color: _teal, size: 20),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (datos.coberturaSedes.isEmpty)
+          const _Vacio(
+            icono: Icons.location_off_outlined,
+            texto: 'Todavía no hay sedes registradas.',
+          )
+        else
+          for (final sede in datos.coberturaSedes)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 18,
+                        color: _teal,
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          sede.nombre,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _tinta,
+                          ),
+                        ),
+                      ),
+                      if (!sede.activa)
+                        const _Etiqueta(
+                          texto: 'Inactiva',
+                          color: Color(0xFF647E88),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  LinearProgressIndicator(
+                    value: sede.asignados == 0
+                        ? 0
+                        : sede.conMarcaciones / sede.asignados,
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(9),
+                    color: _teal,
+                    backgroundColor: const Color(0xFFEAF1F3),
+                    semanticsLabel:
+                        '${sede.nombre}: ${sede.conMarcaciones} de ${sede.asignados} trabajadores con marcaciones',
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${sede.conMarcaciones} de ${sede.asignados} trabajadores',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF647E88),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        Text(
+          datos.esDomingo
+              ? 'Domingo no laborable. No se calcula ausencia.'
+              : 'Incluye personal activo que ya inició labores. No mide jornadas completas.',
+          style: const TextStyle(fontSize: 12, color: Color(0xFF647E88)),
+        ),
+      ],
+    ),
+  );
 }
 
-class _DashboardAdminData {
-  const _DashboardAdminData({
-    required this.trabajadoresActivos,
-    required this.asistenciasHoy,
-    required this.pendientesHoy,
-    required this.observadasHoy,
-    required this.actividadReciente,
-  });
-
-  const _DashboardAdminData.vacio()
-    : trabajadoresActivos = 0,
-      asistenciasHoy = 0,
-      pendientesHoy = 0,
-      observadasHoy = 0,
-      actividadReciente = const [];
-
-  final int trabajadoresActivos;
-  final int asistenciasHoy;
-  final int pendientesHoy;
-  final int observadasHoy;
-  final List<_ActividadDashboard> actividadReciente;
+class _Tarjeta extends StatelessWidget {
+  const _Tarjeta({required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: const Color(0xFFCBDDE3)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x10123847),
+          blurRadius: 18,
+          offset: Offset(0, 5),
+        ),
+      ],
+    ),
+    child: child,
+  );
 }
 
-class _ActividadDashboard {
-  const _ActividadDashboard({
-    required this.titulo,
+class _Titulo extends StatelessWidget {
+  const _Titulo(this.texto, {this.subtitulo});
+  final String texto;
+  final String? subtitulo;
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        texto,
+        style: const TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          color: _tinta,
+          letterSpacing: -.2,
+        ),
+      ),
+      if (subtitulo != null) ...[
+        const SizedBox(height: 5),
+        Text(
+          subtitulo!,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF647E88)),
+        ),
+      ],
+    ],
+  );
+}
+
+class _Vacio extends StatelessWidget {
+  const _Vacio({required this.icono, required this.texto});
+  final IconData icono;
+  final String texto;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 26),
+    child: Column(
+      children: [
+        Icon(icono, size: 30, color: const Color(0xFF8CA8B1)),
+        const SizedBox(height: 10),
+        Text(
+          texto,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Color(0xFF647E88), fontSize: 13),
+        ),
+      ],
+    ),
+  );
+}
+
+class _Fila extends StatelessWidget {
+  const _Fila({
+    required this.nombre,
     required this.detalle,
-    required this.etiqueta,
-    required this.colorAcento,
+    required this.color,
+    this.explicacion,
+    this.estado,
+    this.onAbrir,
   });
-
-  final String titulo;
-  final String detalle;
-  final String etiqueta;
-  final Color colorAcento;
+  final String nombre, detalle;
+  final String? explicacion, estado;
+  final Color color;
+  final VoidCallback? onAbrir;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 13),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: Color(0xFFEBF1F3))),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          margin: const EdgeInsets.only(top: 6),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                nombre.trim().isEmpty ? 'Trabajador sin nombre' : nombre,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _tinta,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                detalle,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF647E88)),
+              ),
+              if (explicacion != null && explicacion!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 5),
+                  child: Text(
+                    explicacion!,
+                    style: TextStyle(fontSize: 12, color: color),
+                  ),
+                ),
+              if (estado != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: _Etiqueta(texto: estado!, color: color),
+                ),
+            ],
+          ),
+        ),
+        if (onAbrir != null)
+          IconButton(
+            tooltip: 'Abrir ficha de $nombre',
+            onPressed: onAbrir,
+            icon: const Icon(
+              Icons.arrow_forward_rounded,
+              color: _teal,
+              size: 19,
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
-class _GrupoDashboardAdmin {
-  _GrupoDashboardAdmin({
-    required this.usuarioId,
-    required this.fechaTexto,
-    required this.fechaOrden,
-    required this.trabajador,
-    required this.correo,
-  });
-
-  final String usuarioId;
-  final String fechaTexto;
-  final DateTime fechaOrden;
-  final String trabajador;
-  final String correo;
-  final List<Asistencia> marcaciones = [];
-  Asistencia? entrada;
-  Asistencia? salida;
-
-  _FilaDashboardAdmin aFila() {
-    final validaciones = marcaciones;
-    final todasDentroZona = validaciones.every((item) => item.dentroDeZona);
-    final todasConRostro = validaciones.every((item) => item.rostroValidado);
-    final completa = entrada != null && salida != null;
-    final observaciones = validaciones
-        .map((item) => item.observacion)
-        .whereType<String>()
-        .where((item) => item.trim().isNotEmpty)
-        .toList();
-
-    final estado = !completa
-        ? 'Pendiente'
-        : (!todasDentroZona || !todasConRostro || observaciones.isNotEmpty)
-        ? 'Observada'
-        : 'Correcta';
-
-    return _FilaDashboardAdmin(
-      usuarioId: usuarioId,
-      trabajador: trabajador.trim().isEmpty
-          ? 'Trabajador sin nombre'
-          : trabajador,
-      correo: correo,
-      fechaTexto: fechaTexto,
-      fechaOrden: fechaOrden,
-      entrada: entrada == null ? '--:--' : _formatearHora(entrada!.fechaHora),
-      salida: salida == null ? '--:--' : _formatearHora(salida!.fechaHora),
-      estado: estado,
-      detalle: observaciones.isEmpty
-          ? _detallePorEstado(estado)
-          : observaciones.join(' | '),
-      fechaEvento: salida?.fechaHora ?? entrada?.fechaHora ?? fechaOrden,
-    );
-  }
-
-  String _detallePorEstado(String estado) {
-    switch (estado) {
-      case 'Correcta':
-        return 'La jornada fue registrada con ubicacion y rostro validados.';
-      case 'Observada':
-        return 'La marcacion fue registrada con revision administrativa pendiente.';
-      case 'Pendiente':
-      default:
-        return 'El registro del dia continua abierto y requiere cierre de jornada.';
-    }
-  }
+class _Etiqueta extends StatelessWidget {
+  const _Etiqueta({required this.texto, required this.color});
+  final String texto;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .09),
+      borderRadius: BorderRadius.circular(7),
+    ),
+    child: Text(
+      texto,
+      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+    ),
+  );
 }
 
-class _FilaDashboardAdmin {
-  const _FilaDashboardAdmin({
-    required this.usuarioId,
-    required this.trabajador,
-    required this.correo,
-    required this.fechaTexto,
-    required this.fechaOrden,
-    required this.entrada,
-    required this.salida,
-    required this.estado,
-    required this.detalle,
-    required this.fechaEvento,
-  });
-
-  final String usuarioId;
-  final String trabajador;
-  final String correo;
-  final String fechaTexto;
-  final DateTime fechaOrden;
-  final String entrada;
-  final String salida;
-  final String estado;
-  final String detalle;
-  final DateTime fechaEvento;
-}
-
-String _formatearFecha(DateTime fecha) {
-  final dia = fecha.day.toString().padLeft(2, '0');
-  final mes = fecha.month.toString().padLeft(2, '0');
-  return '$dia/$mes/${fecha.year}';
-}
-
-String _formatearHora(DateTime fecha) {
-  final hora = fecha.hour.toString().padLeft(2, '0');
-  final minuto = fecha.minute.toString().padLeft(2, '0');
-  return '$hora:$minuto';
-}
-
-bool _mismaFecha(DateTime a, DateTime b) {
-  return a.year == b.year && a.month == b.month && a.day == b.day;
-}
-
-String _dosDigitos(int valor) => valor.toString().padLeft(2, '0');
+String _hora(DateTime d) =>
+    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+String _fecha(DateTime d) =>
+    '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';

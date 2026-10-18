@@ -1,32 +1,29 @@
 import 'dart:async';
+import '../../../reconocimiento_facial/seguridad/servicio_seguridad_biometrica.dart';
 
 import 'package:flutter/material.dart';
 import '../../../autenticacion/presentacion/controladores/sesion_trabajador.dart';
 
-import '../../../alertas/dominio/casos_de_uso/obtener_alertas_por_usuario.dart';
-import '../../../alertas/dominio/casos_de_uso/registrar_alerta.dart';
-import '../../../alertas/dominio/entidades/alerta.dart';
-import '../../../alertas/dominio/entidades/tipo_alerta.dart';
 import '../../../reconocimiento_facial/dominio/casos_de_uso/validar_rostro_capturado.dart';
 import '../../../reconocimiento_facial/dominio/entidades/resultado_validacion_facial.dart';
 import '../../dominio/casos_de_uso/obtener_asistencias_por_usuario.dart';
 import '../../dominio/casos_de_uso/obtener_perfil_trabajador_actual.dart';
 import '../../dominio/casos_de_uso/registrar_asistencia.dart';
 import '../../dominio/entidades/asistencia.dart';
+import '../../dominio/entidades/fecha_asistencia_invalida.dart';
 import '../../dominio/entidades/perfil_trabajador_actual.dart';
 import '../../dominio/entidades/tipo_marcacion.dart';
 import '../../../geolocalizacion/dominio/casos_de_uso/validar_ubicacion_actual.dart';
 import '../../../geolocalizacion/dominio/entidades/resultado_validacion_ubicacion.dart';
 import 'controlador_asistencia_auxiliares.dart';
 import 'controlador_asistencia_marcacion_auxiliares.dart';
+import 'monitor_conexion.dart';
 
 // Controlador principal de la pantalla del trabajador.
 // Carga el perfil real desde Firestore, mantiene el reloj
 // y registra las marcaciones que el trabajador realiza.
 class ControladorAsistencia extends ChangeNotifier {
   ControladorAsistencia({
-    required ObtenerAlertasPorUsuario obtenerAlertasPorUsuario,
-    required RegistrarAlerta registrarAlerta,
     required RegistrarAsistencia registrarAsistencia,
     required ObtenerAsistenciasPorUsuario obtenerAsistenciasPorUsuario,
     required ObtenerPerfilTrabajadorActual obtenerPerfilTrabajadorActual,
@@ -35,18 +32,23 @@ class ControladorAsistencia extends ChangeNotifier {
     required this.usuarioIdAutenticado,
     this.nombreAutenticado,
     this.correoAutenticado,
-  }) : _obtenerAlertasPorUsuario = obtenerAlertasPorUsuario,
-       _registrarAlerta = registrarAlerta,
+    this.comprobarSeguridad,
+    this.alLimpiarRostro,
+    DateTime Function()? ahora,
+    MonitorConexion? monitorConexion,
+    this.esperaConfirmacion = const Duration(seconds: 20),
+  }) : conexion =
+           monitorConexion ?? MonitorConexion(comprobar: () async => false),
+       _ahora = ahora ?? DateTime.now,
        _registrarAsistencia = registrarAsistencia,
        _obtenerAsistenciasPorUsuario = obtenerAsistenciasPorUsuario,
        _obtenerPerfilTrabajadorActual = obtenerPerfilTrabajadorActual,
        _validarRostroCapturado = validarRostroCapturado,
        _validarUbicacionActual = validarUbicacionActual {
     _iniciarReloj();
+    conexion.addListener(_notificarCambio);
   }
 
-  final ObtenerAlertasPorUsuario _obtenerAlertasPorUsuario;
-  final RegistrarAlerta _registrarAlerta;
   final RegistrarAsistencia _registrarAsistencia;
   final ObtenerAsistenciasPorUsuario _obtenerAsistenciasPorUsuario;
   final ObtenerPerfilTrabajadorActual _obtenerPerfilTrabajadorActual;
@@ -55,15 +57,23 @@ class ControladorAsistencia extends ChangeNotifier {
   final String usuarioIdAutenticado;
   final String? nombreAutenticado;
   final String? correoAutenticado;
+  final Future<void> Function()? comprobarSeguridad;
+  final VoidCallback? alLimpiarRostro;
+  final DateTime Function() _ahora;
+  final MonitorConexion conexion;
+  final Duration esperaConfirmacion;
+  Future<String>? _envioPendiente;
+  bool get confirmacionPendiente => _envioPendiente != null;
+  static const _mensajePendiente =
+      'No pudimos confirmar tu marcación. Cuando tengas conexión, actualiza el historial para verificarla. No necesitas volver a enviarla mientras está pendiente.';
   final List<Asistencia> _historialReciente = [];
-  final List<Alerta> _alertasRecientes = [];
 
   Timer? _temporizador;
   DateTime fechaHoraActual = DateTime.now();
   bool cargandoPerfil = false;
   String? errorCargaPerfil;
   bool cargandoHistorial = false;
-  bool cargandoAlertas = false;
+  String? errorFechaHistorial;
   bool validandoUbicacion = false;
   bool validandoRostro = false;
   bool guardando = false;
@@ -85,8 +95,6 @@ class ControladorAsistencia extends ChangeNotifier {
 
   List<Asistencia> get historialReciente =>
       List<Asistencia>.unmodifiable(_historialReciente);
-  List<Alerta> get alertasRecientes =>
-      List<Alerta>.unmodifiable(_alertasRecientes);
 
   // Historial visible para la UI segun el filtro seleccionado.
   // Mantenemos el historial completo en memoria para que cambiar
@@ -94,7 +102,7 @@ class ControladorAsistencia extends ChangeNotifier {
   List<Asistencia> get historialFiltrado {
     switch (filtroHistorial) {
       case FiltroHistorial.hoy:
-        return filtrarMarcacionesPorDia(_historialReciente, DateTime.now());
+        return filtrarMarcacionesPorDia(_historialReciente, _ahora());
       case FiltroHistorial.rango:
         return filtrarMarcacionesPorRango(
           _historialReciente,
@@ -105,27 +113,21 @@ class ControladorAsistencia extends ChangeNotifier {
     }
   }
 
-  Asistencia? get ultimaEntrada {
-    return obtenerUltimaMarcacionPorTipo(
-      _historialReciente,
-      TipoMarcacion.entrada,
-    );
-  }
-
-  Asistencia? get ultimaSalida {
-    return obtenerUltimaMarcacionPorTipo(
-      _historialReciente,
-      TipoMarcacion.salida,
-    );
-  }
-
   TipoHorarioPersonal? get horarioAsignado =>
       horarioDesdeCargo(perfilActual?.cargo ?? '');
 
+  // La jornada iniciada conserva su horario aunque se retire el cargo.
+  // Las marcas de otros días no habilitan una jornada nueva.
+  bool get tieneHorarioParaHoy =>
+      horarioAsignado != null ||
+      _marcacionesDelDia(
+        _ahora(),
+      ).any((marca) => horarioDesdeTexto(marca.tipoHorario) != null);
+
   ResumenJornadaTrabajador get resumenJornadaHoy {
     return construirResumenJornadaTrabajador(
-      _marcacionesDelDia(DateTime.now()),
-      DateTime.now(),
+      _marcacionesDelDia(_ahora()),
+      _ahora(),
       tipoHorario: horarioAsignado,
     );
   }
@@ -160,7 +162,7 @@ class ControladorAsistencia extends ChangeNotifier {
   void _iniciarReloj() {
     _temporizador = Timer.periodic(const Duration(seconds: 1), (_) {
       _actualizarEstadoLocal(() {
-        fechaHoraActual = DateTime.now();
+        fechaHoraActual = _ahora();
       });
     });
   }
@@ -219,34 +221,6 @@ class ControladorAsistencia extends ChangeNotifier {
     mensajeEstado = resultado.mensajeEstado;
   }
 
-  // Registra una alerta en Firestore cuando el trabajador intenta
-  // hacer una marcacion invalida o cuando ocurre un error relevante.
-  Future<void> _registrarAlertaSistema({
-    required TipoAlerta tipo,
-    required String mensaje,
-  }) async {
-    final perfil = perfilActual;
-    if (perfil == null) {
-      return;
-    }
-
-    try {
-      await _registrarAlerta.ejecutar(
-        Alerta(
-          id: '',
-          usuarioId: perfil.usuarioId,
-          nombreUsuario: perfil.nombreCompleto,
-          tipo: tipo,
-          mensaje: mensaje,
-          fechaHora: DateTime.now(),
-        ),
-      );
-      await cargarAlertas();
-    } catch (_) {
-      // Si la alerta no se puede guardar, no bloqueamos la experiencia principal.
-    }
-  }
-
   PerfilTrabajadorActual _crearPerfilDesdeAutenticacion() {
     return PerfilTrabajadorActual.desdeAutenticacion(
       usuarioId: usuarioIdAutenticado,
@@ -256,24 +230,14 @@ class ControladorAsistencia extends ChangeNotifier {
   }
 
   Future<void> _cargarDatosComplementariosDelPerfil() async {
-    await Future.wait<void>([
-      () async {
-        try {
-          await cargarHistorial();
-        } catch (_) {
-          mensajeEstado =
-              'Tu perfil se cargo correctamente, pero el historial no pudo consultarse en este momento.';
-        }
-      }(),
-      () async {
-        try {
-          await cargarAlertas();
-        } catch (_) {
-          // Las alertas visibles ayudan a la transparencia del sistema,
-          // pero no deben impedir que el trabajador use la pantalla principal.
-        }
-      }(),
-    ]);
+    try {
+      await cargarHistorial();
+    } on FechaAsistenciaInvalida {
+      mensajeEstado = FechaAsistenciaInvalida.mensaje;
+    } catch (_) {
+      mensajeEstado =
+          'Tu perfil se cargo correctamente, pero el historial no pudo consultarse en este momento.';
+    }
   }
 
   void _asignarPerfilNoConfigurado() {
@@ -288,7 +252,7 @@ class ControladorAsistencia extends ChangeNotifier {
   // Si no existe el documento, deja un mensaje claro para que el administrador
   // complete la ficha del usuario dentro de la coleccion usuarios.
   Future<void> cargarPerfil() async {
-    if (_cerrado || cargandoPerfil) return;
+    if (_cerrado || cargandoPerfil || guardando) return;
     _actualizarEstadoLocal(() {
       cargandoPerfil = true;
       errorCargaPerfil = null;
@@ -297,7 +261,8 @@ class ControladorAsistencia extends ChangeNotifier {
     if (usuarioIdAutenticado.trim().isEmpty) {
       _actualizarEstadoLocal(() {
         perfilActual = null;
-        errorCargaPerfil = 'No se pudo identificar tu sesión. Vuelve a iniciar sesión.';
+        errorCargaPerfil =
+            'No se pudo identificar tu sesión. Vuelve a iniciar sesión.';
         cargandoPerfil = false;
       });
       return;
@@ -312,7 +277,8 @@ class ControladorAsistencia extends ChangeNotifier {
 
       if (perfil == null) {
         _asignarPerfilNoConfigurado();
-        errorCargaPerfil = 'No se encontró tu perfil de trabajador. Contacta al administrador.';
+        errorCargaPerfil =
+            'No se encontró tu perfil de trabajador. Contacta al administrador.';
         return;
       } else {
         perfilActual = perfil;
@@ -323,7 +289,8 @@ class ControladorAsistencia extends ChangeNotifier {
       }
     } catch (_) {
       _asignarPerfilConErrorDeCarga();
-      errorCargaPerfil = 'No se pudo cargar tu información de asistencia. Revisa tu conexión y vuelve a intentar.';
+      errorCargaPerfil =
+          'No se pudo cargar tu información de asistencia. Revisa tu conexión y vuelve a intentar.';
     } finally {
       _actualizarEstadoLocal(() {
         cargandoPerfil = false;
@@ -343,13 +310,18 @@ class ControladorAsistencia extends ChangeNotifier {
     });
 
     try {
-      final historial = await _obtenerAsistenciasPorUsuario.ejecutar(
-        perfil.usuarioId,
-      );
+      final historial = await _obtenerAsistenciasPorUsuario
+          .ejecutar(perfil.usuarioId)
+          .timeout(esperaConfirmacion);
 
       _historialReciente
         ..clear()
         ..addAll(historial);
+      errorFechaHistorial = null;
+    } on FechaAsistenciaInvalida {
+      _historialReciente.clear();
+      errorFechaHistorial = FechaAsistenciaInvalida.mensaje;
+      rethrow;
     } finally {
       _actualizarEstadoLocal(() {
         cargandoHistorial = false;
@@ -357,41 +329,23 @@ class ControladorAsistencia extends ChangeNotifier {
     }
   }
 
-  // Consulta las incidencias recientes del trabajador desde Firestore.
-  // Estas alertas explican por que una accion fue rechazada o quedo observada.
-  Future<void> cargarAlertas() async {
-    final perfil = perfilActual;
-    if (perfil == null) {
-      return;
-    }
-
-    _actualizarEstadoLocal(() {
-      cargandoAlertas = true;
-    });
-
-    try {
-      final alertas = await _obtenerAlertasPorUsuario.ejecutar(
-        perfil.usuarioId,
-      );
-      _alertasRecientes
-        ..clear()
-        ..addAll(alertas);
-    } finally {
-      _actualizarEstadoLocal(() {
-        cargandoAlertas = false;
-      });
-    }
-  }
-
   // Consulta la ubicacion actual del dispositivo y la compara con la sede real.
   Future<void> validarUbicacion() async {
     final perfil = perfilActual;
-    if (perfil == null || perfil.sedeId.isEmpty || validandoUbicacion) {
+    if (_cerrado ||
+        guardando ||
+        perfil == null ||
+        perfil.sedeId.isEmpty ||
+        validandoUbicacion) {
       return;
     }
+    await _validarUbicacionConPerfil(perfil);
+  }
 
+  Future<void> _validarUbicacionConPerfil(PerfilTrabajadorActual perfil) async {
     _actualizarEstadoLocal(() {
       validandoUbicacion = true;
+      resultadoUbicacion = null;
     });
 
     try {
@@ -433,6 +387,7 @@ class ControladorAsistencia extends ChangeNotifier {
   // Recibe la ruta de la foto tomada por la pantalla de camara
   // y delega a ML Kit la deteccion del rostro.
   Future<void> validarRostroConImagen(String rutaImagen) async {
+    if (_cerrado || guardando || validandoRostro) return;
     _actualizarEstadoLocal(() {
       validandoRostro = true;
     });
@@ -442,21 +397,8 @@ class ControladorAsistencia extends ChangeNotifier {
         rutaImagen: rutaImagen,
       );
       _aplicarResultadoFacial(resultado);
-
-      if (resultadoFacial?.rostroDetectado != true) {
-        await _registrarAlertaSistema(
-          tipo: TipoAlerta.rostroNoValido,
-          mensaje:
-              resultadoFacial?.mensajeEstado ??
-              'No se detecto un rostro valido antes de marcar asistencia.',
-        );
-      }
     } catch (_) {
       _aplicarResultadoFacial(_crearResultadoFacialConError());
-      await _registrarAlertaSistema(
-        tipo: TipoAlerta.rostroNoValido,
-        mensaje: resultadoFacial!.mensajeEstado,
-      );
     } finally {
       _actualizarEstadoLocal(() {
         validandoRostro = false;
@@ -467,6 +409,7 @@ class ControladorAsistencia extends ChangeNotifier {
   // Cada marcacion debe apoyarse en una captura reciente,
   // por eso limpiamos el estado facial cuando la asistencia ya fue aceptada.
   void limpiarValidacionFacial() {
+    alLimpiarRostro?.call();
     _actualizarEstadoLocal(() {
       resultadoFacial = null;
     });
@@ -478,12 +421,8 @@ class ControladorAsistencia extends ChangeNotifier {
     });
   }
 
-  Future<bool> _rechazarMarcacion({
-    required TipoAlerta tipoAlerta,
-    required String mensaje,
-  }) async {
+  Future<bool> _rechazarMarcacion({required String mensaje}) async {
     mensajeEstado = mensaje;
-    await _registrarAlertaSistema(tipo: tipoAlerta, mensaje: mensaje);
     _notificarCambio();
     return false;
   }
@@ -504,19 +443,15 @@ class ControladorAsistencia extends ChangeNotifier {
   Future<bool> _validarUbicacionParaMarcacion(
     TipoMarcacion tipoMarcacion,
   ) async {
-    if (resultadoUbicacion == null) {
-      await validarUbicacion();
-    }
+    // La validación de la pantalla previa nunca sustituye al GPS al confirmar.
+    await _validarUbicacionConPerfil(perfilActual!);
 
     final rechazo = obtenerRechazoUbicacionMarcacion(
       ubicacion: resultadoUbicacion,
       tipoMarcacion: tipoMarcacion,
     );
     if (rechazo != null) {
-      return _rechazarMarcacion(
-        tipoAlerta: rechazo.tipoAlerta,
-        mensaje: rechazo.mensaje,
-      );
+      return _rechazarMarcacion(mensaje: rechazo.mensaje);
     }
 
     return true;
@@ -529,10 +464,7 @@ class ControladorAsistencia extends ChangeNotifier {
       tipoMarcacion: tipoMarcacion,
     );
     if (rechazo != null) {
-      return _rechazarMarcacion(
-        tipoAlerta: rechazo.tipoAlerta,
-        mensaje: rechazo.mensaje,
-      );
+      return _rechazarMarcacion(mensaje: rechazo.mensaje);
     }
 
     return true;
@@ -549,10 +481,7 @@ class ControladorAsistencia extends ChangeNotifier {
       tipoHorario: horarioAsignado,
     );
     if (rechazo != null) {
-      return _rechazarMarcacion(
-        tipoAlerta: rechazo.tipoAlerta,
-        mensaje: rechazo.mensaje,
-      );
+      return _rechazarMarcacion(mensaje: rechazo.mensaje);
     }
 
     return true;
@@ -582,6 +511,7 @@ class ControladorAsistencia extends ChangeNotifier {
   }
 
   void _insertarAsistenciaEnMemoria(Asistencia asistencia, String idGenerado) {
+    _historialReciente.removeWhere((marca) => marca.id == idGenerado);
     _historialReciente.insert(0, clonarAsistenciaConId(asistencia, idGenerado));
   }
 
@@ -599,38 +529,66 @@ class ControladorAsistencia extends ChangeNotifier {
     TipoMarcacion tipoMarcacion, {
     DateTime? fechaProceso,
   }) => SesionTrabajador.instancia.protegerOperacion(
-    () => _registrarMarcacionProtegida(tipoMarcacion, fechaProceso: fechaProceso),
+    () =>
+        _registrarMarcacionProtegida(tipoMarcacion, fechaProceso: fechaProceso),
   );
 
   Future<bool> _registrarMarcacionProtegida(
     TipoMarcacion tipoMarcacion, {
     DateTime? fechaProceso,
   }) async {
-    if (guardando || cargandoPerfil || cargandoHistorial || validandoRostro) {
+    if (confirmacionPendiente) {
+      _actualizarEstadoLocal(() => mensajeEstado = _mensajePendiente);
       return false;
     }
-    if (horarioAsignado == null) {
-      _actualizarEstadoLocal(
-        () => mensajeEstado =
-            'Tu cargo no tiene horario asignado. Solicita revisión al administrador.',
-      );
+    if (_cerrado ||
+        guardando ||
+        cargandoPerfil ||
+        cargandoHistorial ||
+        validandoRostro ||
+        validandoUbicacion) {
       return false;
     }
-    final perfil = perfilActual;
-    if (!_validarContextoBasicoMarcacion(perfil)) return false;
-    final perfilSeguro = perfil!;
 
     _actualizarEstadoLocal(() {
       guardando = true;
       mensajeEstado = null;
+      resultadoUbicacion = null;
     });
 
+    var envioIniciado = false;
     try {
+      // En producción estas lecturas exigen servidor: no se reutiliza el perfil
+      // almacenado en memoria ni el de la caché cuando no hay conexión.
+      final perfilSeguro = await _obtenerPerfilTrabajadorActual
+          .ejecutar(
+            usuarioId: usuarioIdAutenticado,
+            nombreFallback: nombreAutenticado,
+            correoFallback: correoAutenticado,
+          )
+          .timeout(esperaConfirmacion);
+      if (_cerrado) return false;
+      perfilActual = perfilSeguro;
+      if (perfilSeguro == null) {
+        mensajeEstado =
+            'No se pudo confirmar un perfil activo. Actualiza tus datos o consulta al administrador.';
+        return false;
+      }
+      errorCargaPerfil = null;
+      if (comprobarSeguridad != null) await comprobarSeguridad!();
+      if (!_validarContextoBasicoMarcacion(perfilSeguro)) return false;
       // La consulta al servidor detecta marcas previas de otros dispositivos.
       await cargarHistorial();
-      if (!await _validarUbicacionParaMarcacion(tipoMarcacion)) return false;
+      if (_cerrado) return false;
+      if (!tieneHorarioParaHoy) {
+        mensajeEstado =
+            'Tu cargo no tiene horario asignado. Solicita revisión al administrador.';
+        return false;
+      }
       if (!await _validarRostroParaMarcacion(tipoMarcacion)) return false;
-      final ahora = DateTime.now();
+      if (!await _validarUbicacionParaMarcacion(tipoMarcacion)) return false;
+      if (_cerrado) return false;
+      final ahora = _ahora();
       if (fechaProceso != null &&
           !mismoProcesoMarcacion(
             fechaProceso,
@@ -647,7 +605,8 @@ class ControladorAsistencia extends ChangeNotifier {
       }
       final horarioRegistro = resumenJornadaHoy.tipoHorario;
       final ventanaRegistro = ventanasPara(
-        horarioRegistro, fecha: ahora,
+        horarioRegistro,
+        fecha: ahora,
       ).firstWhere((v) => v.tipo == tipoMarcacion && v.contiene(ahora));
       final asistencia = _crearAsistenciaPendiente(
         horario: horarioRegistro,
@@ -659,27 +618,56 @@ class ControladorAsistencia extends ChangeNotifier {
         urlEvidenciaFacial: null,
       );
 
-      final idGenerado = await _registrarAsistencia.ejecutar(asistencia);
-
-      _insertarAsistenciaEnMemoria(asistencia, idGenerado);
-      mensajeEstado = _mensajeRegistroExitoso(
-        tipoMarcacion: tipoMarcacion,
-        fechaHora: asistencia.fechaHora,
+      envioIniciado = true;
+      // El timeout libera la pantalla, pero NO cancela la escritura de Firebase.
+      // Conservamos su resultado para atender también confirmaciones tardías.
+      final envio = _registrarAsistencia.ejecutar(asistencia);
+      _envioPendiente = envio;
+      final confirmacion = envio.then(
+        (idGenerado) {
+          _envioPendiente = null;
+          if (_cerrado) return;
+          _insertarAsistenciaEnMemoria(asistencia, idGenerado);
+          mensajeEstado = _mensajeRegistroExitoso(
+            tipoMarcacion: tipoMarcacion,
+            fechaHora: asistencia.fechaHora,
+          );
+          limpiarValidacionFacial();
+          _notificarCambio();
+        },
+        onError: (Object error, StackTrace stack) {
+          _envioPendiente = null;
+          if (!_cerrado) {
+            mensajeEstado =
+                'No pudimos confirmar la asistencia. Actualiza el historial con internet antes de reintentar.';
+            _notificarCambio();
+          }
+          Error.throwWithStackTrace(error, stack);
+        },
       );
-      limpiarValidacionFacial();
-      _notificarCambio();
+      await confirmacion.timeout(esperaConfirmacion);
 
       // Refrescamos el historial real despues de guardar para que la pantalla
       // refleje exactamente los datos persistidos en Firestore.
       try {
-        await Future.wait<void>([cargarHistorial(), cargarAlertas()]);
+        await cargarHistorial().timeout(esperaConfirmacion);
       } catch (_) {
         // El registro ya fue confirmado; una recarga no cambia ese resultado.
       }
       return true;
+    } on FechaAsistenciaInvalida {
+      mensajeEstado = FechaAsistenciaInvalida.mensaje;
+      return false;
+    } on ErrorBiometrico catch (e) {
+      limpiarValidacionFacial();
+      mensajeEstado = e.mensaje;
+      return false;
     } catch (_) {
-      mensajeEstado =
-          'No pudimos confirmar la asistencia. Revisa tu conexion y actualiza el historial antes de reintentar; la marca puede existir.';
+      mensajeEstado = envioIniciado
+          ? (confirmacionPendiente
+                ? _mensajePendiente
+                : 'No pudimos confirmar la asistencia. Actualiza el historial con internet antes de reintentar.')
+          : 'No pudimos actualizar los datos necesarios para marcar. Revisa tu conexión y vuelve a intentar. No se envió la asistencia.';
       return false;
     } finally {
       _actualizarEstadoLocal(() {
@@ -692,6 +680,8 @@ class ControladorAsistencia extends ChangeNotifier {
   void dispose() {
     _cerrado = true;
     _temporizador?.cancel();
+    conexion.removeListener(_notificarCambio);
+    conexion.dispose();
     super.dispose();
   }
 

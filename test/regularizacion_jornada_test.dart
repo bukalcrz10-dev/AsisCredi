@@ -164,11 +164,19 @@ void main() {
       await repo.regularizarJornada(
         originales: j.originales,
         actualizadas: j.preparar(horas(j)..['manana_entrada'] = '08:30'),
+        administradorId: 'admin-1',
+        motivo: 'Corrección solicitada por el trabajador.',
       );
       expect(db.datos['e']!['campoFuturo'], 'conservar');
       expect(db.datos['e']!['tipoHorario'], 'asesor');
       expect(db.datos['e']!['bloqueJornada'], 'manana');
       expect((db.datos['e']!['fechaHora'] as Timestamp).toDate().minute, 30);
+      expect(db.auditoria, isEmpty);
+      expect(db.datos['e']!.containsKey('ultimaAuditoriaId'), isFalse);
+      expect(
+        db.datos['e']!['observacion'],
+        contains('Motivo: Corrección solicitada por el trabajador.'),
+      );
       expect(db.confirmaciones, 1);
     },
   );
@@ -185,10 +193,30 @@ void main() {
       repo.regularizarJornada(
         originales: j.originales,
         actualizadas: j.preparar(horas(j)..['manana_entrada'] = '08:30'),
+        administradorId: 'admin-1',
+        motivo: 'Corrección solicitada por el trabajador.',
       ),
       throwsStateError,
     );
     expect((db.datos['e']!['fechaHora'] as Timestamp).toDate().minute, 40);
+    expect(db.confirmaciones, 0);
+  });
+  test('rechaza motivo vacío o demasiado largo antes de escribir', () async {
+    final db = _Db();
+    final repo = RepositorioAsistenciasImpl(
+      FuenteDatosAsistenciasFirestore(firestore: db),
+    );
+    for (final motivo in ['   ', List.filled(501, 'a').join()]) {
+      await expectLater(
+        repo.regularizarJornada(
+          originales: [entrada],
+          actualizadas: [entrada],
+          administradorId: 'admin-1',
+          motivo: motivo,
+        ),
+        throwsFormatException,
+      );
+    }
     expect(db.confirmaciones, 0);
   });
   test(
@@ -204,23 +232,33 @@ void main() {
       await repo.regularizarJornada(
         originales: j.originales,
         actualizadas: nuevas,
+        administradorId: 'admin-1',
+        motivo: 'Corrección solicitada por el trabajador.',
       );
       expect(db.datos.containsKey(idMarcacionPorBloque(nuevas.single)), true);
       await expectLater(
-        repo.regularizarJornada(originales: j.originales, actualizadas: nuevas),
+        repo.regularizarJornada(
+          originales: j.originales,
+          actualizadas: nuevas,
+          administradorId: 'admin-1',
+          motivo: 'Corrección solicitada por el trabajador.',
+        ),
         throwsStateError,
       );
       expect(db.datos.length, 2);
+      expect(db.auditoria, isEmpty);
     },
   );
 }
 
 class _Db extends Fake implements FirebaseFirestore {
   final datos = <String, Map<String, dynamic>>{};
+  final auditoria = <Map<String, dynamic>>[];
   int confirmaciones = 0;
+  int _siguienteAuditoria = 0;
   @override
   CollectionReference<Map<String, dynamic>> collection(String path) =>
-      _Col(this);
+      _Col(this, path);
   @override
   Future<T> runTransaction<T>(
     TransactionHandler<T> handler, {
@@ -238,18 +276,22 @@ class _Db extends Fake implements FirebaseFirestore {
 }
 
 class _Col extends Fake implements CollectionReference<Map<String, dynamic>> {
-  _Col(this.db);
+  _Col(this.db, this.coleccion);
   final _Db db;
+  final String coleccion;
   @override
   DocumentReference<Map<String, dynamic>> doc([String? path]) =>
-      _Doc(db, path!);
+      _Doc(db, coleccion, path ?? 'audit-${db._siguienteAuditoria++}');
 }
 
 class _Doc extends Fake implements DocumentReference<Map<String, dynamic>> {
-  _Doc(this.db, this.id);
+  _Doc(this.db, this.coleccion, this.id);
   final _Db db;
+  final String coleccion;
   @override
   final String id;
+  @override
+  String get path => '$coleccion/$id';
 }
 
 class _Snap extends Fake implements DocumentSnapshot<Map<String, dynamic>> {
@@ -285,9 +327,14 @@ class _Tx extends Fake implements Transaction {
 
   @override
   Transaction set<T>(DocumentReference<T> ref, T data, [SetOptions? options]) {
-    escrituras.add(
-      () => db.datos[ref.id] = Map<String, dynamic>.from(data as Map),
-    );
+    escrituras.add(() {
+      final valores = Map<String, dynamic>.from(data as Map);
+      if (ref.path.startsWith('auditoriaRegularizaciones/')) {
+        db.auditoria.add(valores);
+      } else {
+        db.datos[ref.id] = valores;
+      }
+    });
     return this;
   }
 }

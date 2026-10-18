@@ -5,11 +5,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Politica local de sesion. Nunca almacena credenciales ni sustituye permisos.
 class SesionTrabajador {
-  SesionTrabajador({DateTime Function()? reloj})
-    : _reloj = reloj ?? DateTime.now;
+  SesionTrabajador({
+    DateTime Function()? reloj,
+    String clave = 'sesion_trabajador_v1',
+  }) : _clave = clave,
+       _reloj = reloj ?? DateTime.now;
   static final instancia = SesionTrabajador();
+  static final administrador = SesionTrabajador(
+    clave: 'sesion_administrador_v1',
+  );
   static const limite = Duration(minutes: 15);
-  static const _clave = 'sesion_trabajador_v1';
+  final String _clave;
   final DateTime Function() _reloj;
   SharedPreferences? _prefs;
   String? _uid;

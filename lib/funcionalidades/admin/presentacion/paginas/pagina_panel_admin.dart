@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../usuarios/dominio/entidades/usuario.dart';
 import '../modelos/item_menu_admin.dart';
 import '../widgets/layout_admin.dart';
-import '../widgets/modulo_asistencias_admin.dart';
 import '../widgets/modulo_dashboard_admin.dart';
 import '../widgets/modulo_trabajadores_admin.dart';
+import '../widgets/modulo_sedes_admin.dart';
 
 class PaginaPanelAdmin extends StatefulWidget {
   const PaginaPanelAdmin({
@@ -23,6 +23,7 @@ class PaginaPanelAdmin extends StatefulWidget {
 
 class _PaginaPanelAdminState extends State<PaginaPanelAdmin> {
   int _indiceSeleccionado = 0;
+  String? _trabajadorDashboardId;
 
   static const _items = <ItemMenuAdmin>[
     ItemMenuAdmin(
@@ -38,10 +39,24 @@ class _PaginaPanelAdminState extends State<PaginaPanelAdmin> {
       icono: Icons.groups_outlined,
     ),
     ItemMenuAdmin(
-      id: 'asistencias',
-      titulo: 'Asistencias',
-      descripcion: 'Consulta administrativa de marcaciones y validaciones.',
-      icono: Icons.fact_check_outlined,
+      id: 'crear_trabajador',
+      grupoId: 'trabajadores',
+      titulo: 'Crear trabajador',
+      descripcion: 'Registro de personal y acceso al sistema.',
+      icono: Icons.person_add_alt_1_outlined,
+    ),
+    ItemMenuAdmin(
+      id: 'trabajadores_vigentes',
+      grupoId: 'trabajadores',
+      titulo: 'Vigentes',
+      descripcion: 'Consulta y gestión de los trabajadores vigentes.',
+      icono: Icons.verified_user_outlined,
+    ),
+    ItemMenuAdmin(
+      id: 'sedes',
+      titulo: 'Sedes',
+      descripcion: 'Configuración de ubicaciones y zonas de asistencia.',
+      icono: Icons.location_on_outlined,
     ),
   ];
 
@@ -55,6 +70,7 @@ class _PaginaPanelAdminState extends State<PaginaPanelAdmin> {
       onSeleccionar: (indice) {
         setState(() {
           _indiceSeleccionado = indice;
+          _trabajadorDashboardId = null;
         });
       },
       child: KeyedSubtree(
@@ -67,11 +83,31 @@ class _PaginaPanelAdminState extends State<PaginaPanelAdmin> {
   Widget _crearModuloActual() {
     switch (_items[_indiceSeleccionado].id) {
       case 'dashboard':
-        return const ModuloDashboardAdmin();
+        return ModuloDashboardAdmin(
+          onAbrirTrabajador: (id) => setState(() {
+            _trabajadorDashboardId = id;
+            _indiceSeleccionado = _items.indexWhere(
+              (item) => item.id == 'trabajadores_vigentes',
+            );
+          }),
+          onAbrirSedes: () => setState(() {
+            _indiceSeleccionado = _items.indexWhere(
+              (item) => item.id == 'sedes',
+            );
+          }),
+        );
       case 'trabajadores':
-        return const ModuloTrabajadoresAdmin();
-      case 'asistencias':
-        return const ModuloAsistenciasAdmin();
+      case 'trabajadores_vigentes':
+        return ModuloTrabajadoresAdmin(
+          vista: VistaTrabajadoresAdmin.vigentes,
+          trabajadorInicialId: _trabajadorDashboardId,
+        );
+      case 'crear_trabajador':
+        return const ModuloTrabajadoresAdmin(
+          vista: VistaTrabajadoresAdmin.crear,
+        );
+      case 'sedes':
+        return const ModuloSedesAdmin();
       default:
         return const SizedBox.shrink();
     }

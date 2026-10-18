@@ -5,7 +5,7 @@ import '../entidades/asistencia.dart';
 // sin imponer todavia si los datos vienen de Firebase, una API o memoria local.
 abstract class RepositorioAsistencias {
   // Registra una asistencia y devuelve el id final del documento creado.
-  // El retorno del id permitira luego enlazar alertas, reportes o auditorias.
+  // El id permite identificar la marcacion guardada en el historial.
   Future<String> registrarAsistencia(Asistencia asistencia);
 
   // Recupera el historial real del trabajador desde la base de datos.

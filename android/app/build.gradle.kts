@@ -45,3 +45,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("org.opencv:opencv:4.12.0")
+    implementation("com.google.mlkit:face-detection:16.1.7")
+}

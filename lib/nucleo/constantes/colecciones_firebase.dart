@@ -5,5 +5,4 @@ abstract final class ColeccionesFirebase {
   static const usuarios = 'usuarios';
   static const sedes = 'sedes';
   static const asistencias = 'asistencias';
-  static const alertas = 'alertas';
 }

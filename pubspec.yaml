@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.1.3+5
 
 environment:
   sdk: ^3.11.4
@@ -30,6 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   # Firebase Core (required para inicializar Firebase en tu app)
   firebase_core: ^3.7.0   # actualizado a la versión más reciente compatible
@@ -40,9 +42,6 @@ dependencies:
   # Autenticacion base del sistema para trabajadores y administradores.
   firebase_auth: ^5.7.0
 
-  # Cliente HTTP para utilidades de red.
-  http: ^1.4.0
-
   # Geolocalizacion del dispositivo para validar si el trabajador
   # esta dentro del radio permitido de su sede.
   geolocator: ^13.0.2
@@ -51,12 +50,10 @@ dependencies:
   # antes de permitir la marcacion de asistencia.
   camera: ^0.11.2+1
 
-  # Detector facial sobre imagen capturada. En esta primera fase
-  # solo confirmamos que existe al menos un rostro en la foto.
+  # Detector de rostros utilizado por el flujo de validacion facial.
   google_mlkit_face_detection: ^0.13.2
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
+  # Fuente requerida indirectamente por los widgets de Flutter en web.
   cupertino_icons: ^1.0.8
   excel: ^4.0.6
   pdf: ^3.12.0
@@ -87,6 +84,7 @@ flutter:
   # imagenes de apoyo y futuros elementos de interfaz.
   assets:
     - assets/imagenes/
+    - assets/licencias_faciales/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

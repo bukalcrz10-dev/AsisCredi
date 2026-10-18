@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../dominio/entidades/usuario.dart';
 import '../../dominio/repositorios/repositorio_usuarios.dart';
 import '../fuentes_datos/fuente_datos_usuarios_firestore.dart';
@@ -44,9 +46,43 @@ class RepositorioUsuariosImpl implements RepositorioUsuarios {
         .toList();
   }
 
+  Future<PaginaUsuarios> obtenerPaginaUsuarios({
+    int limite = 30,
+    QueryDocumentSnapshot<Map<String, dynamic>>? despuesDe,
+  }) async {
+    final pagina = await _fuenteDatos.obtenerPaginaUsuarios(
+      limite: limite,
+      despuesDe: despuesDe,
+    );
+    return PaginaUsuarios(
+      usuarios: pagina.documentos
+          .map(
+            (documento) => ModeloUsuario.desdeMapa(
+              documento.data(),
+              documento.id,
+            ).aEntidad(),
+          )
+          .toList(),
+      ultimoDocumento: pagina.ultimoDocumento,
+      hayMas: pagina.hayMas,
+    );
+  }
+
   @override
   Future<void> guardarUsuario(Usuario usuario) {
     final modelo = ModeloUsuario.desdeEntidad(usuario);
     return _fuenteDatos.guardarUsuario(id: usuario.id, datos: modelo.aMapa());
   }
+}
+
+class PaginaUsuarios {
+  const PaginaUsuarios({
+    required this.usuarios,
+    required this.ultimoDocumento,
+    required this.hayMas,
+  });
+
+  final List<Usuario> usuarios;
+  final QueryDocumentSnapshot<Map<String, dynamic>>? ultimoDocumento;
+  final bool hayMas;
 }

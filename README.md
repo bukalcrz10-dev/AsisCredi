@@ -11,7 +11,7 @@ Aplicación Flutter con panel administrador web y aplicación de asistencia para
 - Altas con una sesión auxiliar de Auth: no cierran la sesión del administrador. Perfiles, cargos, sedes y estado se guardan en Firestore.
 - Contraseñas: recuperación por enlace enviado al correo del trabajador. El correo de acceso existente no se edita desde el panel.
 - Cuenta inactiva: las reglas y la APP bloquean el acceso institucional. No equivale a deshabilitar la cuenta en Authentication.
-- La detección facial comprueba presencia de rostro; no verifica identidad ni prueba de vida. No guarda fotos nuevas en la nube.
+- La validación facial móvil compara la referencia enrolada con SFace y comprueba parpadeos. Requiere rostro y dispositivo aprobados por el administrador. No guarda fotos nuevas en la nube.
 
 ## Configuración
 
@@ -44,8 +44,8 @@ Compilar no publica la WEB ni instala la APP. Actualizar ambas para sustituir ve
 - `lib/funcionalidades/autenticacion`: inicio de sesión y control de acceso.
 - `lib/funcionalidades/asistencias`: horarios, marcas, historial y exportaciones.
 - `lib/funcionalidades/geolocalizacion`: permisos, GPS y distancia a la sede.
-- `lib/funcionalidades/reconocimiento_facial`: cámara y detección local ML Kit.
-- `lib/funcionalidades/usuarios`, `sedes`, `alertas`: perfiles, sedes e incidencias.
+- `lib/funcionalidades/reconocimiento_facial`: cámara, detección local ML Kit, comparación facial y autorización biométrica.
+- `lib/funcionalidades/usuarios`, `sedes`: perfiles y sedes. Los errores de marcación se muestran en pantalla sin guardarse en una colección de alertas.
 - `firestore.rules`: reglas locales; su publicación es una operación separada.
 
 No hay servidor Functions ni dependencias de Functions/Storage en el código actual.

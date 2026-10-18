@@ -57,7 +57,11 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
   }
 
   Future<void> _exportar({bool excel = false, ResumenDiaHistorial? dia}) async {
-    if (_exportando || controlador.cargandoHistorial) return;
+    if (_exportando ||
+        controlador.cargandoHistorial ||
+        controlador.errorFechaHistorial != null) {
+      return;
+    }
     final dias = dia == null
         ? agruparHistorialPorDia(controlador.historialFiltrado)
         : [dia];
@@ -118,13 +122,17 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Guardado cancelado. Vuelve a exportar y confirma Guardar en la carpeta elegida.'),
+              content: Text(
+                'Guardado cancelado. Vuelve a exportar y confirma Guardar en la carpeta elegida.',
+              ),
             ),
           );
         }
       }
     } catch (error) {
-      final codigo = error is PlatformException ? error.code : error.runtimeType.toString();
+      final codigo = error is PlatformException
+          ? error.code
+          : error.runtimeType.toString();
       debugPrint('Exportación de historial: etapa=$etapa; código=$codigo');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -146,6 +154,12 @@ class _ModuloHistorialTrabajadorState extends State<ModuloHistorialTrabajador> {
 
   @override
   Widget build(BuildContext context) {
+    if (controlador.errorFechaHistorial != null) {
+      return ListView(
+        padding: MedidasSistema.paddingPagina,
+        children: [Text(controlador.errorFechaHistorial!)],
+      );
+    }
     final resumenes = agruparHistorialPorDia(controlador.historialFiltrado);
 
     return ListView(

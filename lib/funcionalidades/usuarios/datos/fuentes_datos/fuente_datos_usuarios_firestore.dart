@@ -5,29 +5,60 @@ import '../../../../nucleo/constantes/colecciones_firebase.dart';
 // Fuente de datos de usuarios en Firestore.
 // Esta capa solo se ocupa de leer el documento del perfil desde la coleccion usuarios.
 class FuenteDatosUsuariosFirestore {
-  FuenteDatosUsuariosFirestore({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  FuenteDatosUsuariosFirestore({
+    FirebaseFirestore? firestore,
+    this.soloServidor = false,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
+  final bool soloServidor;
 
   Future<Map<String, dynamic>?> obtenerUsuarioPorId(String id) async {
     final documento = await _firestore
         .collection(ColeccionesFirebase.usuarios)
         .doc(id)
-        .get();
+        .get(
+          GetOptions(
+            source: soloServidor ? Source.server : Source.serverAndCache,
+          ),
+        );
 
     return documento.data();
   }
 
   Future<List<MapEntry<String, Map<String, dynamic>>>> obtenerUsuarios() async {
-    final consulta = await _firestore
-        .collection(ColeccionesFirebase.usuarios)
-        .orderBy('nombreCompleto')
-        .get();
+    final documentos = <MapEntry<String, Map<String, dynamic>>>[];
+    QueryDocumentSnapshot<Map<String, dynamic>>? cursor;
+    while (true) {
+      final pagina = await obtenerPaginaUsuarios(
+        limite: 100,
+        despuesDe: cursor,
+      );
+      documentos.addAll(
+        pagina.documentos.map(
+          (documento) => MapEntry(documento.id, documento.data()),
+        ),
+      );
+      if (!pagina.hayMas) break;
+      cursor = pagina.ultimoDocumento;
+    }
+    return documentos;
+  }
 
-    return consulta.docs
-        .map((documento) => MapEntry(documento.id, documento.data()))
-        .toList();
+  Future<PaginaUsuariosFirestore> obtenerPaginaUsuarios({
+    int limite = 30,
+    QueryDocumentSnapshot<Map<String, dynamic>>? despuesDe,
+  }) async {
+    Query<Map<String, dynamic>> consulta = _firestore
+        .collection(ColeccionesFirebase.usuarios)
+        .orderBy(FieldPath.documentId);
+    if (despuesDe != null) consulta = consulta.startAfterDocument(despuesDe);
+    final resultado = await consulta.limit(limite).get();
+    return PaginaUsuariosFirestore(
+      documentos: resultado.docs,
+      ultimoDocumento: resultado.docs.isEmpty ? despuesDe : resultado.docs.last,
+      hayMas: resultado.docs.length == limite,
+    );
   }
 
   Future<void> guardarUsuario({
@@ -60,8 +91,21 @@ class FuenteDatosUsuariosFirestore {
       datos['sedeAsignadaId'] = sedeAsignadaId;
     }
 
-    return _firestore.collection(ColeccionesFirebase.usuarios).doc(id).update(
-      datos,
-    );
+    return _firestore
+        .collection(ColeccionesFirebase.usuarios)
+        .doc(id)
+        .update(datos);
   }
+}
+
+class PaginaUsuariosFirestore {
+  const PaginaUsuariosFirestore({
+    required this.documentos,
+    required this.ultimoDocumento,
+    required this.hayMas,
+  });
+
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> documentos;
+  final QueryDocumentSnapshot<Map<String, dynamic>>? ultimoDocumento;
+  final bool hayMas;
 }

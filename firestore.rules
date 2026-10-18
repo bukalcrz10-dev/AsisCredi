@@ -12,6 +12,270 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'administrador';
     }
 
+    function textoOpcional(datos, campo) {
+      return datos.get(campo, null) == null || datos[campo] is string;
+    }
+
+    // Contrato de ModeloAsistencia.aMapa para nuevas marcas del trabajador.
+    // Las regularizaciones del administrador conservan su acceso independiente.
+    function estructuraAsistencia(datos) {
+      return datos.keys().hasAll([
+          'usuarioId', 'nombreUsuario', 'sedeId', 'tipoMarcacion', 'fechaHora',
+          'latitud', 'longitud', 'dentroDeZona', 'rostroValidado',
+          'tipoHorario', 'bloqueJornada', 'notificacionEnviada', 'enlaceMapa'
+        ])
+        && datos.keys().hasOnly([
+          'usuarioId', 'nombreUsuario', 'sedeId', 'tipoMarcacion', 'fechaHora',
+          'latitud', 'longitud', 'dentroDeZona', 'rostroValidado',
+          'tipoHorario', 'bloqueJornada', 'notificacionEnviada', 'enlaceMapa',
+          'observacion', 'correoNotificacion', 'urlEvidenciaFacial'
+        ])
+        && datos.usuarioId == request.auth.uid
+        && datos.nombreUsuario is string && datos.nombreUsuario.size() > 0
+        && datos.sedeId is string && datos.sedeId.size() > 0
+        && datos.tipoMarcacion in ['entrada', 'salida']
+        && datos.tipoHorario in ['asesor', 'plataforma', 'historico']
+        && datos.bloqueJornada in ['manana', 'tarde']
+        && datos.fechaHora is timestamp
+        && datos.latitud is number && datos.latitud >= -90 && datos.latitud <= 90
+        && datos.longitud is number && datos.longitud >= -180 && datos.longitud <= 180
+        && datos.dentroDeZona == true && datos.rostroValidado == true
+        && datos.notificacionEnviada == false
+        && datos.enlaceMapa is string
+        && textoOpcional(datos, 'observacion')
+        && textoOpcional(datos, 'correoNotificacion')
+        && textoOpcional(datos, 'urlEvidenciaFacial');
+    }
+
+    function sedePermitida(datos, perfil) {
+      let asignada = perfil.get('sedeAsignadaId', '').trim();
+      let principal = asignada in ['sede-principal', 'sede_principal'];
+      let normalizada = principal ? 'sede_principal' : asignada;
+      let efectiva = principal
+        && !exists(/databases/$(database)/documents/sedes/sede_principal)
+        ? 'sede-principal' : normalizada;
+      return efectiva != '' && datos.sedeId == efectiva
+        && exists(/databases/$(database)/documents/sedes/$(efectiva));
+    }
+
+    // Solo interpreta el timestamp declarado en Perú; no sustituye el reloj del
+    // dispositivo ni garantiza que la hora enviada coincida con request.time.
+    function fechaPeru(fechaHora) {
+      return fechaHora - duration.value(5, 'h');
+    }
+
+    function dosDigitos(numero) {
+      return (numero < 10 ? '0' : '') + string(numero);
+    }
+
+    function usuarioCodificado() {
+      let base = request.auth.uid.toUtf8().toBase64();
+      // Dart base64Url conserva el relleno '=' del identificador existente.
+      return base + (base.size() % 4 == 2 ? '==' : (base.size() % 4 == 3 ? '=' : ''));
+    }
+
+    function prefijoJornada(fecha) {
+      return 'marcacion_' + usuarioCodificado() + '_' + string(fecha.year())
+        + dosDigitos(fecha.month()) + dosDigitos(fecha.day()) + '_';
+    }
+
+    function marcaGuardada(prefijo, bloque, tipo, fecha) {
+      let id = prefijo + bloque + '_' + tipo;
+      let ruta = /databases/$(database)/documents/asistencias/$(id);
+      let datos = exists(ruta) ? get(ruta).data : {};
+      return datos.get('fechaHora', null) is timestamp
+        && fechaPeru(datos.fechaHora).date() == fecha.date() ? datos : {};
+    }
+
+    function primeraConHorario(a, b) {
+      let validoA = a.get('tipoHorario', '') in ['asesor', 'plataforma', 'historico'];
+      let validoB = b.get('tipoHorario', '') in ['asesor', 'plataforma', 'historico'];
+      return !validoA ? (validoB ? b : {})
+        : (!validoB || a.fechaHora <= b.fechaHora ? a : b);
+    }
+
+    function horarioDelCargo(perfil) {
+      let cargo = perfil.get('cargo', '').trim().lower();
+      return cargo in ['asesor', 'asesora'] ? 'asesor'
+        : (cargo in ['plataforma', 'auxiliar de operaciones']
+          ? 'plataforma' : '');
+    }
+
+    function enRango(minutos, inicio, finExclusivo) {
+      return minutos >= inicio && minutos < finExclusivo;
+    }
+
+    function ventanaHistorica(datos, minutos) {
+      return datos.bloqueJornada == 'manana'
+        ? (datos.tipoMarcacion == 'entrada'
+          ? enRango(minutos, 480, 770) : enRango(minutos, 780, 811))
+        : (datos.tipoMarcacion == 'entrada'
+          ? enRango(minutos, 870, 1101) : enRango(minutos, 1110, 1171));
+    }
+
+    function ventanaLaborable(datos, minutos) {
+      return datos.tipoHorario == 'asesor'
+        ? datos.bloqueJornada == 'manana' && (datos.tipoMarcacion == 'entrada'
+          ? enRango(minutos, 480, 1100) : enRango(minutos, 1110, 1171))
+        : (datos.bloqueJornada == 'manana'
+          ? (datos.tipoMarcacion == 'entrada'
+            ? enRango(minutos, 480, 780) : enRango(minutos, 780, 900))
+          : (datos.tipoMarcacion == 'entrada'
+            ? enRango(minutos, 890, 1100) : enRango(minutos, 1110, 1171)));
+    }
+
+    function ventanaPermitida(datos, fecha) {
+      let minutos = fecha.hours() * 60 + fecha.minutes();
+      let calendario = datos.tipoHorario != 'historico'
+        && fecha >= timestamp.date(2026, 10, 8);
+      // dayOfWeek de Rules: lunes=1, sábado=6, domingo=7.
+      let sabado = calendario && fecha.dayOfWeek() == 6;
+      let domingo = calendario && fecha.dayOfWeek() == 7;
+      return !domingo && (datos.tipoHorario == 'historico'
+        ? ventanaHistorica(datos, minutos)
+        : (sabado
+          ? datos.bloqueJornada == 'manana' && (datos.tipoMarcacion == 'entrada'
+            ? enRango(minutos, 480, 900) : enRango(minutos, 900, 961))
+          : ventanaLaborable(datos, minutos)));
+    }
+
+    function secuenciaPermitida(datos, entradaManana, salidaManana, entradaTarde, salidaTarde) {
+      let entrada = datos.bloqueJornada == 'manana' ? entradaManana : entradaTarde;
+      let salida = datos.bloqueJornada == 'manana' ? salidaManana : salidaTarde;
+      return datos.tipoMarcacion == 'salida'
+        ? entrada.size() > 0 && entrada.fechaHora <= datos.fechaHora
+        : salida.size() == 0
+          && (datos.tipoHorario != 'plataforma' || datos.bloqueJornada != 'tarde'
+            || ((entradaManana.size() == 0 || salidaManana.size() > 0)
+              && (salidaManana.size() == 0 || salidaManana.fechaHora <= datos.fechaHora)));
+    }
+
+    function jornadaPermitida(datos, asistenciaId, perfil) {
+      let fecha = fechaPeru(datos.fechaHora);
+      let prefijo = prefijoJornada(fecha);
+      let em = marcaGuardada(prefijo, 'manana', 'entrada', fecha);
+      let sm = marcaGuardada(prefijo, 'manana', 'salida', fecha);
+      let et = marcaGuardada(prefijo, 'tarde', 'entrada', fecha);
+      let st = marcaGuardada(prefijo, 'tarde', 'salida', fecha);
+      let primera = primeraConHorario(primeraConHorario(em, sm), primeraConHorario(et, st));
+      let horario = primera.get('tipoHorario', horarioDelCargo(perfil));
+      return asistenciaId == prefijo + datos.bloqueJornada + '_' + datos.tipoMarcacion
+        && datos.tipoHorario == horario
+        && ventanaPermitida(datos, fecha)
+        && secuenciaPermitida(datos, em, sm, et, st);
+    }
+
+    // El token de instalación es secreto; nunca aparece en documentos de asistencia.
+    function configBiometrica(uid) {
+      return get(/databases/$(database)/documents/configuracionBiometrica/$(uid)).data;
+    }
+    function credencialActiva(token) {
+      let uid = request.auth.uid;
+      let cfg = configBiometrica(uid);
+      let vinculo = get(/databases/$(database)/documents/vinculosBiometricosPrivados/$(uid)).data;
+      let cred = get(/databases/$(database)/documents/credencialesBiometricas/$(token)).data;
+      return activo() && cfg.estado == 'activo'
+        && vinculo.token == token && vinculo.version == cfg.version
+        && cred.usuarioId == uid && cred.version == cfg.version
+        && cred.estado == 'aprobado' && cred.modeloFacial == 'sface-2021dec-v1';
+    }
+    // 128 float64; la app y la aprobación validan finitud y norma.
+    function vectorFacial(v) {
+      return v is bytes && v.size() == 1024;
+    }
+    function solicitudBiometrica(token) {
+      let d = request.resource.data;
+      let cfg = configBiometrica(request.auth.uid);
+      return activo() && token.matches('^[a-f0-9]{64}$')
+        && cfg.permitirEnrolamiento == true && d.version == cfg.version
+        && d.keys().hasOnly(['usuarioId', 'version', 'estado', 'modeloFacial',
+          'vector', 'modeloCelular', 'codigo', 'consentimiento', 'creadoEn'])
+        && d.usuarioId == request.auth.uid && d.estado == 'pendiente'
+        && d.modeloFacial == 'sface-2021dec-v1' && vectorFacial(d.vector)
+        && d.modeloCelular is string && d.modeloCelular.size() <= 200
+        && d.codigo is string && d.codigo.size() == 6
+        && d.codigo.matches('^[a-f0-9]{6}$') && token.matches('^[a-f0-9]{58}' + d.codigo + '$')
+        && d.consentimiento == true && d.creadoEn == request.time;
+    }
+    function pruebaDispositivo(asistenciaId) {
+      let vinculo = get(/databases/$(database)/documents/vinculosBiometricosPrivados/$(request.auth.uid)).data;
+      let token = vinculo.token;
+      let ruta = /databases/$(database)/documents/credencialesBiometricas/$(token)/comprobantes/$(asistenciaId);
+      let prueba = getAfter(ruta).data;
+      // Debe crearse en este mismo lote. Sus reglas de create comprueban
+      // autorización, versión, similitud y parpadeos sin duplicar la evaluación.
+      return !exists(ruta) && prueba.usuarioId == request.auth.uid
+        && prueba.creadoEn == request.time;
+    }
+    function nuevaAsistenciaTrabajador(asistenciaId) {
+      let datos = request.resource.data;
+      let perfil = get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+      return estructuraAsistencia(datos)
+        && sedePermitida(datos, perfil)
+        && jornadaPermitida(datos, asistenciaId, perfil)
+        && pruebaDispositivo(asistenciaId);
+    }
+
+    function estructuraRegularizacion(datos) {
+      return datos.keys().hasAll([
+          'usuarioId', 'nombreUsuario', 'sedeId', 'tipoMarcacion', 'fechaHora',
+          'latitud', 'longitud', 'dentroDeZona', 'rostroValidado',
+          'tipoHorario', 'bloqueJornada', 'notificacionEnviada', 'enlaceMapa'
+        ])
+        && datos.keys().hasOnly([
+          'usuarioId', 'nombreUsuario', 'sedeId', 'tipoMarcacion', 'fechaHora',
+          'latitud', 'longitud', 'dentroDeZona', 'rostroValidado',
+          'tipoHorario', 'bloqueJornada', 'notificacionEnviada', 'enlaceMapa',
+          'observacion', 'correoNotificacion', 'urlEvidenciaFacial'
+        ])
+        && datos.usuarioId is string && datos.usuarioId.size() > 0
+        && datos.nombreUsuario is string && datos.nombreUsuario.size() > 0
+        && datos.sedeId is string && datos.sedeId.size() > 0
+        && datos.tipoMarcacion in ['entrada', 'salida']
+        && datos.tipoHorario in ['asesor', 'plataforma', 'historico']
+        && datos.bloqueJornada in ['manana', 'tarde']
+        && datos.fechaHora is timestamp
+        && datos.latitud is number && datos.latitud >= -90 && datos.latitud <= 90
+        && datos.longitud is number && datos.longitud >= -180 && datos.longitud <= 180
+        && datos.dentroDeZona is bool && datos.rostroValidado is bool
+        && datos.notificacionEnviada is bool
+        && datos.enlaceMapa is string
+        && textoOpcional(datos, 'observacion')
+        && textoOpcional(datos, 'correoNotificacion')
+        && textoOpcional(datos, 'urlEvidenciaFacial');
+    }
+
+    match /configuracionBiometrica/{uid} {
+      allow get: if activo() && request.auth.uid == uid;
+      allow read, write: if administrador();
+    }
+    match /vinculosBiometricosPrivados/{uid} {
+      allow read, write: if administrador();
+    }
+    match /credencialesBiometricas/{token} {
+      allow read, write: if administrador();
+      allow get: if activo() && (
+        !exists(/databases/$(database)/documents/credencialesBiometricas/$(token))
+        || (resource.data.usuarioId == request.auth.uid
+          && resource.data.version == configBiometrica(request.auth.uid).version
+          && (configBiometrica(request.auth.uid).permitirEnrolamiento == true
+            || credencialActiva(token))));
+      allow create: if solicitudBiometrica(token);
+      allow update: if resource.data.usuarioId == request.auth.uid
+        && resource.data.estado == 'pendiente' && solicitudBiometrica(token);
+      match /comprobantes/{asistenciaId} {
+        allow read, write: if administrador();
+        allow create: if credencialActiva(token)
+          && request.resource.data.keys().hasOnly(['usuarioId', 'creadoEn', 'modeloFacial', 'similitud', 'parpadeos'])
+          && request.resource.data.usuarioId == request.auth.uid
+          && request.resource.data.creadoEn == request.time
+          && request.resource.data.modeloFacial == 'sface-2021dec-v1'
+          && request.resource.data.parpadeos == 2
+          && request.resource.data.similitud is number
+          && request.resource.data.similitud >= 0.52 && request.resource.data.similitud <= 1
+          && getAfter(/databases/$(database)/documents/asistencias/$(asistenciaId)).data.usuarioId == request.auth.uid;
+      }
+    }
     match /usuarios/{usuarioId} {
       allow get: if request.auth != null && request.auth.uid == usuarioId;
       allow read, write: if administrador();
@@ -25,18 +289,15 @@ service cloud.firestore {
     match /asistencias/{asistenciaId} {
       allow read: if administrador()
         || (activo() && resource.data.usuarioId == request.auth.uid);
-      allow create: if administrador()
-        || (activo() && request.resource.data.usuarioId == request.auth.uid);
-      allow update, delete: if administrador();
+      allow create: if (administrador() && estructuraRegularizacion(request.resource.data))
+        || (activo() && nuevaAsistenciaTrabajador(asistenciaId));
+      allow update: if administrador()
+        && request.resource.data.fechaHora is timestamp
+        && textoOpcional(request.resource.data, 'observacion')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['fechaHora', 'observacion']);
+      allow delete: if false;
     }
 
-    match /alertas/{alertaId} {
-      allow read: if administrador()
-        || (activo() && resource.data.usuarioId == request.auth.uid);
-      allow create: if administrador()
-        || (activo() && request.resource.data.usuarioId == request.auth.uid
-          && request.resource.data.atendida == false);
-      allow update, delete: if administrador();
-    }
   }
 }

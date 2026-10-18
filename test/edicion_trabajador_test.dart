@@ -3,7 +3,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:asistencia_app/funcionalidades/admin/presentacion/modelos/trabajador_admin_demo.dart';
+import 'package:asistencia_app/funcionalidades/admin/presentacion/modelos/trabajador_admin.dart';
 import 'package:asistencia_app/funcionalidades/usuarios/datos/fuentes_datos/fuente_datos_usuarios_firestore.dart';
 
 class _Firestore extends Fake implements FirebaseFirestore {
@@ -35,7 +35,7 @@ class _Documento extends Fake
 }
 
 void main() {
-  const anterior = TrabajadorAdminDemo(
+  const anterior = TrabajadorAdmin(
     id: 'trabajador-1',
     nombreCompleto: 'Ana',
     correo: 'ana@example.com',

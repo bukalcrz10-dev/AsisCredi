@@ -15,6 +15,10 @@ DateTime sabado(int hora, [int minuto = 0, int segundo = 0]) =>
 
 class _Domingo extends Fake implements ControladorAsistencia {
   @override
+  bool get tieneHorarioParaHoy => true;
+  @override
+  DateTime get fechaHoraActual => DateTime(2026, 10, 11);
+  @override
   TipoHorarioPersonal get horarioAsignado => TipoHorarioPersonal.plataforma;
   @override
   ResumenJornadaTrabajador get resumenJornadaHoy =>

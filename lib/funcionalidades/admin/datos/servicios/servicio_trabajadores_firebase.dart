@@ -16,7 +16,6 @@ class ServicioTrabajadoresFirebase {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
   final Future<SesionAltaTrabajador> Function()? _abrirSesionAlta;
-
   Future<SesionAltaTrabajador> _crearSesionAlta() async {
     final app = await Firebase.initializeApp(
       name: 'alta-trabajador-${DateTime.now().microsecondsSinceEpoch}',
@@ -56,6 +55,7 @@ class ServicioTrabajadoresFirebase {
     required bool activo,
     required String sedeAsignadaId,
     required String password,
+    DateTime? fechaInicioLabores,
   }) async {
     await _exigirAdministrador();
     final sesion = await (_abrirSesionAlta?.call() ?? _crearSesionAlta());
@@ -88,7 +88,7 @@ class ServicioTrabajadoresFirebase {
                 'Este trabajador ya tiene perfil. Actualiza la lista y usa Editar.',
           );
         }
-        transaccion.set(referencia, <String, dynamic>{
+        final datos = <String, dynamic>{
           'nombreCompleto': nombreCompleto.trim(),
           'correo': credencial.user!.email,
           'telefono': telefono.trim(),
@@ -98,7 +98,12 @@ class ServicioTrabajadoresFirebase {
           'activo': activo,
           'sedeAsignadaId': sedeAsignadaId,
           'creadoEn': FieldValue.serverTimestamp(),
-        });
+          if (fechaInicioLabores != null)
+            'fechaInicioLabores': fechaInicioLabores
+                .toIso8601String()
+                .substring(0, 10),
+        };
+        transaccion.set(referencia, datos);
       });
       return uid;
     } catch (error) {
@@ -141,6 +146,7 @@ class ServicioTrabajadoresFirebase {
     required String rol,
     required bool activo,
     required String sedeAsignadaId,
+    DateTime? fechaInicioLabores,
   }) async {
     await _exigirAdministrador();
     final referencia = _firestore.collection('usuarios').doc(uid);
@@ -162,7 +168,7 @@ class ServicioTrabajadoresFirebase {
               'No puedes desactivar tu propia cuenta ni quitarte el rol de administrador.',
         );
       }
-      transaccion.update(referencia, <String, dynamic>{
+      final datos = <String, dynamic>{
         'nombreCompleto': nombreCompleto.trim(),
         'telefono': telefono.trim(),
         'area': area.trim(),
@@ -170,7 +176,13 @@ class ServicioTrabajadoresFirebase {
         'rol': rol.toLowerCase(),
         'activo': activo,
         'sedeAsignadaId': sedeAsignadaId,
-      });
+        if (fechaInicioLabores != null)
+          'fechaInicioLabores': fechaInicioLabores.toIso8601String().substring(
+            0,
+            10,
+          ),
+      };
+      transaccion.update(referencia, datos);
     });
   }
 

@@ -1,18 +1,43 @@
+import '../modelos/evaluacion_asistencia_admin.dart';
+import '../modelos/jornada_admin.dart';
 import '../modelos/regularizacion_jornada.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../app/diseno_sistema.dart';
 import '../../../asistencias/datos/fuentes_datos/fuente_datos_asistencias_firestore.dart';
 import '../../../asistencias/datos/repositorios/repositorio_asistencias_impl.dart';
 import '../../../asistencias/dominio/entidades/asistencia.dart';
-import '../../../asistencias/presentacion/controladores/controlador_asistencia_auxiliares.dart';
+import '../../../asistencias/dominio/entidades/fecha_asistencia_invalida.dart';
 import '../../../usuarios/datos/fuentes_datos/fuente_datos_usuarios_firestore.dart';
 import '../../../usuarios/datos/repositorios/repositorio_usuarios_impl.dart';
+import '../../../usuarios/dominio/entidades/usuario.dart';
+import '../../../sedes/datos/fuentes_datos/fuente_datos_sedes_firestore.dart';
+import '../../../sedes/datos/modelos/modelo_sede.dart';
 import 'contenedor_modulo_admin.dart';
 import 'tarjeta_resumen_admin.dart';
+import 'cuadricula_admin.dart';
+import 'exportacion_asistencias_trabajador_admin.dart';
+import '../modelos/informe_asistencias_trabajador.dart';
+
+enum VistaAsistenciasAdmin { completa, registros, resumen }
 
 class ModuloAsistenciasAdmin extends StatefulWidget {
-  const ModuloAsistenciasAdmin({super.key});
+  const ModuloAsistenciasAdmin({
+    super.key,
+    this.trabajadorId,
+    this.repositorioAsistencias,
+    this.repositorioUsuarios,
+    this.cargarSedes,
+    this.vista = VistaAsistenciasAdmin.completa,
+  });
+
+  final String? trabajadorId;
+  final RepositorioAsistenciasImpl? repositorioAsistencias;
+  final RepositorioUsuariosImpl? repositorioUsuarios;
+  final Future<Map<String, String>> Function()? cargarSedes;
+  final VistaAsistenciasAdmin vista;
 
   @override
   State<ModuloAsistenciasAdmin> createState() => _ModuloAsistenciasAdminState();
@@ -21,13 +46,24 @@ class ModuloAsistenciasAdmin extends StatefulWidget {
 class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
   late final RepositorioAsistenciasImpl _repositorioAsistencias;
   late final RepositorioUsuariosImpl _repositorioUsuarios;
-  late Future<List<_AsistenciaAdminFila>> _cargaAsistencias;
+  late Future<void> _cargaAsistencias;
+  final List<Asistencia> _marcacionesCargadas = [];
+  List<_AsistenciaAdminFila> _filasCargadas = [];
+  QueryDocumentSnapshot<Map<String, dynamic>>? _ultimoDocumento;
+  Map<String, Usuario> _usuariosPorId = {};
+  Map<String, String> _sedesPorId = {};
+  bool _hayMasAsistencias = true;
+  bool _cargandoMas = false;
+  String? _errorCargarMas;
+  int _versionConsulta = 0;
 
   final TextEditingController _busquedaController = TextEditingController();
   final ScrollController _tablaScrollController = ScrollController();
 
   String _busqueda = '';
   String _estadoSeleccionado = 'Todos';
+  DateTime? _fechaInicio;
+  DateTime? _fechaFin;
 
   static const List<String> _estados = <String>[
     'Todos',
@@ -39,13 +75,26 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
   @override
   void initState() {
     super.initState();
-    _repositorioAsistencias = RepositorioAsistenciasImpl(
-      FuenteDatosAsistenciasFirestore(),
-    );
-    _repositorioUsuarios = RepositorioUsuariosImpl(
-      FuenteDatosUsuariosFirestore(),
-    );
-    _cargaAsistencias = _cargarFilasAsistencias();
+    _repositorioAsistencias =
+        widget.repositorioAsistencias ??
+        RepositorioAsistenciasImpl(FuenteDatosAsistenciasFirestore());
+    _repositorioUsuarios =
+        widget.repositorioUsuarios ??
+        RepositorioUsuariosImpl(FuenteDatosUsuariosFirestore());
+    _cargaAsistencias = _cargarPaginaInicial();
+  }
+
+  @override
+  void didUpdateWidget(covariant ModuloAsistenciasAdmin oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trabajadorId != widget.trabajadorId) {
+      _busquedaController.clear();
+      _busqueda = '';
+      _estadoSeleccionado = 'Todos';
+      _fechaInicio = null;
+      _fechaFin = null;
+      _recargarAsistencias();
+    }
   }
 
   @override
@@ -55,17 +104,131 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
     super.dispose();
   }
 
-  Future<List<_AsistenciaAdminFila>> _cargarFilasAsistencias() async {
-    final asistencias = await _repositorioAsistencias.obtenerAsistencias();
-    final usuarios = await _repositorioUsuarios.obtenerUsuarios();
-    final usuariosPorId = {for (final usuario in usuarios) usuario.id: usuario};
+  Future<void> _cargarPaginaInicial() async {
+    final version = ++_versionConsulta;
+    final trabajadorId = widget.trabajadorId?.trim();
+    if (trabajadorId != null && trabajadorId.isEmpty) {
+      throw ArgumentError(
+        'El identificador del trabajador no puede estar vacío.',
+      );
+    }
+    _cargandoMas = false;
+    _errorCargarMas = null;
+    final List<Usuario> usuarios;
+    if (trabajadorId == null) {
+      usuarios = await _repositorioUsuarios.obtenerUsuarios();
+    } else {
+      final usuario = await _repositorioUsuarios.obtenerUsuarioPorId(
+        trabajadorId,
+      );
+      usuarios = usuario == null ? [] : [usuario];
+    }
+    final sedes = widget.cargarSedes != null
+        ? await widget.cargarSedes!()
+        : {
+            for (final sede in await FuenteDatosSedesFirestore().obtenerSedes())
+              sede.key: ModeloSede.desdeMapa(sede.value, sede.key).nombre,
+          };
+    if (!mounted || version != _versionConsulta) return;
+    _sedesPorId = sedes;
+    _usuariosPorId = {for (final usuario in usuarios) usuario.id: usuario};
+    if (trabajadorId != null) {
+      final marcaciones = await _repositorioAsistencias
+          .obtenerAsistenciasPorUsuario(trabajadorId);
+      if (!mounted || version != _versionConsulta) return;
+      final inicio = _fechaInicio == null
+          ? null
+          : DateTime(
+              _fechaInicio!.year,
+              _fechaInicio!.month,
+              _fechaInicio!.day,
+            );
+      final fin = _fechaFin == null
+          ? null
+          : DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day + 1);
+      _marcacionesCargadas
+        ..clear()
+        ..addAll(
+          marcaciones.where(
+            (a) =>
+                a.usuarioId == trabajadorId &&
+                (inicio == null || !a.fechaHora.isBefore(inicio)) &&
+                (fin == null || a.fechaHora.isBefore(fin)),
+          ),
+        );
+      _ultimoDocumento = null;
+      _hayMasAsistencias = false;
+      _filasCargadas = _agruparMarcaciones(_marcacionesCargadas);
+      return;
+    }
+    final pagina = await _repositorioAsistencias.obtenerPaginaAsistencias(
+      desde: _fechaInicio == null
+          ? null
+          : DateTime(
+              _fechaInicio!.year,
+              _fechaInicio!.month,
+              _fechaInicio!.day,
+            ),
+      hastaExclusiva: _fechaFin == null
+          ? null
+          : DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day + 1),
+    );
+    if (!mounted || version != _versionConsulta) return;
+    _marcacionesCargadas
+      ..clear()
+      ..addAll(pagina.asistencias);
+    _ultimoDocumento = pagina.ultimoDocumento;
+    _hayMasAsistencias = pagina.hayMas;
+    _filasCargadas = _agruparMarcaciones(_marcacionesCargadas);
+  }
 
+  Future<void> _cargarSiguientePagina() async {
+    if (widget.trabajadorId != null) return;
+    if (_cargandoMas || !_hayMasAsistencias) return;
+    final version = _versionConsulta;
+    setState(() {
+      _cargandoMas = true;
+      _errorCargarMas = null;
+    });
+    try {
+      final pagina = await _repositorioAsistencias.obtenerPaginaAsistencias(
+        desde: _fechaInicio == null
+            ? null
+            : DateTime(
+                _fechaInicio!.year,
+                _fechaInicio!.month,
+                _fechaInicio!.day,
+              ),
+        hastaExclusiva: _fechaFin == null
+            ? null
+            : DateTime(_fechaFin!.year, _fechaFin!.month, _fechaFin!.day + 1),
+        despuesDe: _ultimoDocumento,
+      );
+      if (!mounted || version != _versionConsulta) return;
+      setState(() {
+        _marcacionesCargadas.addAll(pagina.asistencias);
+        _ultimoDocumento = pagina.ultimoDocumento;
+        _hayMasAsistencias = pagina.hayMas;
+        _filasCargadas = _agruparMarcaciones(_marcacionesCargadas);
+        _cargandoMas = false;
+      });
+    } catch (_) {
+      if (!mounted || version != _versionConsulta) return;
+      setState(() {
+        _cargandoMas = false;
+        _errorCargarMas =
+            'No se pudo cargar la siguiente página. Revisa la conexión e intenta nuevamente.';
+      });
+    }
+  }
+
+  List<_AsistenciaAdminFila> _agruparMarcaciones(List<Asistencia> asistencias) {
     final grupos = <String, _GrupoAsistenciaAdmin>{};
 
     for (final asistencia in asistencias) {
       final fecha = _formatearFecha(asistencia.fechaHora);
-      final clave = '${asistencia.usuarioId}|$fecha|${asistencia.sedeId}';
-      final usuario = usuariosPorId[asistencia.usuarioId];
+      final clave = claveJornadaAdmin(asistencia);
+      final usuario = _usuariosPorId[asistencia.usuarioId];
 
       final grupo = grupos.putIfAbsent(
         clave,
@@ -78,7 +241,7 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
           correo: usuario?.correo ?? asistencia.correoNotificacion ?? '',
           area: usuario?.area ?? '',
           cargo: usuario?.cargo ?? '',
-          sedeId: asistencia.sedeId,
+          sedesPorId: _sedesPorId,
         ),
       );
 
@@ -114,13 +277,76 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
 
   void _recargarAsistencias() {
     setState(() {
-      _cargaAsistencias = _cargarFilasAsistencias();
+      _marcacionesCargadas.clear();
+      _filasCargadas = [];
+      _ultimoDocumento = null;
+      _hayMasAsistencias = true;
+      _cargaAsistencias = _cargarPaginaInicial();
     });
+  }
+
+  void _limpiarFechas() {
+    setState(() {
+      _fechaInicio = null;
+      _fechaFin = null;
+      _marcacionesCargadas.clear();
+      _filasCargadas = [];
+      _ultimoDocumento = null;
+      _hayMasAsistencias = true;
+      _cargaAsistencias = _cargarPaginaInicial();
+    });
+  }
+
+  Future<void> _seleccionarFecha({required bool inicio}) async {
+    final actual = inicio ? _fechaInicio : _fechaFin;
+    final otra = inicio ? _fechaFin : _fechaInicio;
+    final seleccionada = await showDatePicker(
+      context: context,
+      initialDate: actual ?? otra ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (seleccionada == null || !mounted) return;
+    final dia = DateTime(
+      seleccionada.year,
+      seleccionada.month,
+      seleccionada.day,
+    );
+    if (otra != null && (inicio ? dia.isAfter(otra) : dia.isBefore(otra))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            inicio
+                ? 'La fecha de inicio no puede ser posterior a la fecha de fin.'
+                : 'La fecha de fin no puede ser anterior a la fecha de inicio.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      if (inicio) {
+        _fechaInicio = dia;
+      } else {
+        _fechaFin = dia;
+      }
+      _marcacionesCargadas.clear();
+      _filasCargadas = [];
+      _ultimoDocumento = null;
+      _hayMasAsistencias = true;
+      _cargaAsistencias = _cargarPaginaInicial();
+    });
+  }
+
+  String _textoFecha(DateTime? fecha, String vacio) {
+    if (fecha == null) return vacio;
+    return '${fecha.day.toString().padLeft(2, '0')}/'
+        '${fecha.month.toString().padLeft(2, '0')}/${fecha.year}';
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<_AsistenciaAdminFila>>(
+    return FutureBuilder<void>(
       future: _cargaAsistencias,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -141,7 +367,9 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Ocurrio un problema al consultar las asistencias reales. Revisa permisos, conexion o indices de Firestore.',
+                  snapshot.error is FechaAsistenciaInvalida
+                      ? snapshot.error.toString()
+                      : 'Ocurrio un problema al consultar las asistencias reales. Revisa permisos, conexion o indices de Firestore.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: ColoresSistema.rojoInstitucionalOscuro,
                   ),
@@ -157,7 +385,7 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
           );
         }
 
-        final todas = snapshot.data ?? const <_AsistenciaAdminFila>[];
+        final todas = _filasCargadas;
         final asistencias = _filtrarAsistencias(todas);
         final correctas = todas
             .where((item) => item.estado == 'Correcta')
@@ -169,77 +397,172 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
             .where((item) => item.estado == 'Pendiente')
             .length;
 
+        final tarjetasResumen = CuadriculaAdmin(
+          maximoColumnas: 4,
+          children: [
+            TarjetaResumenAdmin(
+              titulo: 'Marcaciones cargadas',
+              compacta: widget.vista == VistaAsistenciasAdmin.resumen,
+              valor: '${_marcacionesCargadas.length}',
+              detalle: widget.vista == VistaAsistenciasAdmin.resumen
+                  ? '${todas.length} ${todas.length == 1 ? 'jornada registrada' : 'jornadas registradas'}'
+                  : '${todas.length} jornadas agrupadas por trabajador y fecha.',
+              colorAcento: ColoresPanel.azul,
+              icono: Icons.fact_check_outlined,
+            ),
+            TarjetaResumenAdmin(
+              titulo: 'Jornadas correctas',
+              compacta: widget.vista == VistaAsistenciasAdmin.resumen,
+              valor: '$correctas',
+              detalle: widget.vista == VistaAsistenciasAdmin.resumen
+                  ? 'Completas y sin observaciones'
+                  : 'Entrada y salida completas sin observacion.',
+              colorAcento: ColoresSistema.verdeExito,
+              icono: Icons.verified_outlined,
+            ),
+            TarjetaResumenAdmin(
+              titulo: 'Jornadas observadas',
+              compacta: widget.vista == VistaAsistenciasAdmin.resumen,
+              valor: '$observadas',
+              detalle: widget.vista == VistaAsistenciasAdmin.resumen
+                  ? 'Requieren revisión'
+                  : 'Casos con validaciones parciales o alertas.',
+              colorAcento: const Color(0xFFB66A18),
+              icono: Icons.warning_amber_outlined,
+            ),
+            TarjetaResumenAdmin(
+              titulo: 'Pendientes',
+              compacta: widget.vista == VistaAsistenciasAdmin.resumen,
+              valor: '$pendientes',
+              detalle: widget.vista == VistaAsistenciasAdmin.resumen
+                  ? 'Jornadas por completar'
+                  : 'Jornadas incompletas o aun sin cierre.',
+              colorAcento: ColoresSistema.verdeInstitucional,
+              icono: Icons.pending_actions_outlined,
+            ),
+          ],
+        );
+        if (widget.vista == VistaAsistenciasAdmin.resumen) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16,
+                runSpacing: 10,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Resumen de asistencias',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Historial completo del trabajador',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _recargarAsistencias,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Actualizar resumen'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              tarjetasResumen,
+            ],
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 14,
-              runSpacing: 14,
-              children: [
-                TarjetaResumenAdmin(
-                  titulo: 'Marcaciones cargadas',
-                  valor: '${todas.length}',
-                  detalle: 'Registros agrupados desde Firestore.',
-                  colorAcento: ColoresPanel.azul,
-                  icono: Icons.fact_check_outlined,
-                ),
-                TarjetaResumenAdmin(
-                  titulo: 'Registros correctos',
-                  valor: '$correctas',
-                  detalle: 'Entrada y salida completas sin observacion.',
-                  colorAcento: ColoresSistema.verdeExito,
-                  icono: Icons.verified_outlined,
-                ),
-                TarjetaResumenAdmin(
-                  titulo: 'Registros observados',
-                  valor: '$observadas',
-                  detalle: 'Casos con validaciones parciales o alertas.',
-                  colorAcento: const Color(0xFFB66A18),
-                  icono: Icons.warning_amber_outlined,
-                ),
-                TarjetaResumenAdmin(
-                  titulo: 'Pendientes',
-                  valor: '$pendientes',
-                  detalle: 'Jornadas incompletas o aun sin cierre.',
-                  colorAcento: ColoresSistema.verdeInstitucional,
-                  icono: Icons.pending_actions_outlined,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+            if (widget.vista == VistaAsistenciasAdmin.completa) ...[
+              tarjetasResumen,
+              const SizedBox(height: 16),
+            ],
             ContenedorModuloAdmin(
               titulo: 'Consulta de asistencias',
-              descripcion:
-                  'Marcaciones reales de Firestore agrupadas por trabajador, fecha y bloques de jornada.',
+              descripcion: '',
+              accionCabecera:
+                  widget.trabajadorId != null &&
+                      _usuariosPorId[widget.trabajadorId] != null
+                  ? ExportacionAsistenciasTrabajadorAdmin(
+                      key: ValueKey(widget.trabajadorId),
+                      informe: InformeAsistenciasTrabajador(
+                        usuario: _usuariosPorId[widget.trabajadorId]!,
+                        marcaciones: asistencias
+                            .expand((fila) => fila.originales)
+                            .toList(),
+                        desde: _fechaInicio,
+                        hasta: _fechaFin,
+                        estado: _estadoSeleccionado,
+                      ).informe,
+                    )
+                  : null,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final ancho = constraints.maxWidth;
-                      if (ancho >= 1100) {
-                        return Row(
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F8FA),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: ColoresSistema.bordeSuave),
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final ancho = constraints.maxWidth;
+                        final escalaFiltros =
+                            (MediaQuery.textScalerOf(context).scale(15) / 15)
+                                .clamp(1.0, 2.0);
+                        final anchoFecha = ancho < 600
+                            ? ancho
+                            : (190.0 * escalaFiltros)
+                                  .clamp(0.0, ancho)
+                                  .toDouble();
+                        final anchoBusqueda = ancho < 600
+                            ? ancho
+                            : (360.0 * escalaFiltros)
+                                  .clamp(0.0, ancho)
+                                  .toDouble();
+
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                controller: _busquedaController,
-                                onChanged: (valor) {
-                                  setState(() {
-                                    _busqueda = valor;
-                                  });
-                                },
-                                decoration: const InputDecoration(
-                                  labelText: 'Trabajador',
-                                  hintText: 'Buscar por nombre o correo...',
-                                  prefixIcon: Icon(Icons.search),
+                            if (widget.trabajadorId == null)
+                              SizedBox(
+                                width: anchoBusqueda,
+                                child: TextField(
+                                  controller: _busquedaController,
+                                  onChanged: (valor) {
+                                    setState(() {
+                                      _busqueda = valor;
+                                    });
+                                  },
+                                  decoration: const InputDecoration(
+                                    labelText: 'Trabajador',
+                                    hintText: 'Buscar por nombre o correo...',
+                                    prefixIcon: Icon(Icons.search),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
                             SizedBox(
-                              width: 180,
+                              width: ancho < 600
+                                  ? ancho
+                                  : (160.0 * escalaFiltros)
+                                        .clamp(0.0, ancho)
+                                        .toDouble(),
                               child: DropdownButtonFormField<String>(
+                                isExpanded: true,
                                 initialValue: _estadoSeleccionado,
                                 decoration: const InputDecoration(
                                   labelText: 'Estado',
@@ -262,21 +585,33 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                                 },
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            const Expanded(
+                            SizedBox(
+                              width: anchoFecha,
                               child: _CampoFiltroAdmin(
                                 icono: Icons.calendar_today_outlined,
-                                texto: 'Fecha inicio',
+                                texto: _textoFecha(
+                                  _fechaInicio,
+                                  'Fecha inicio',
+                                ),
+                                onTap: () => _seleccionarFecha(inicio: true),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            const Expanded(
+                            SizedBox(
+                              width: anchoFecha,
                               child: _CampoFiltroAdmin(
                                 icono: Icons.event_outlined,
-                                texto: 'Fecha fin',
+                                texto: _textoFecha(_fechaFin, 'Fecha fin'),
+                                onTap: () => _seleccionarFecha(inicio: false),
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            IconButton(
+                              tooltip: 'Limpiar fechas',
+                              onPressed:
+                                  _fechaInicio == null && _fechaFin == null
+                                  ? null
+                                  : _limpiarFechas,
+                              icon: const Icon(Icons.filter_alt_off_outlined),
+                            ),
                             IconButton(
                               tooltip: 'Actualizar asistencias',
                               onPressed: _recargarAsistencias,
@@ -284,103 +619,41 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                             ),
                           ],
                         );
-                      }
-
-                      final anchoFecha = ancho < 760 ? 150.0 : 260.0;
-                      final anchoBusqueda = ancho < 760 ? 190.0 : 420.0;
-
-                      return Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: anchoBusqueda,
-                            child: TextField(
-                              controller: _busquedaController,
-                              onChanged: (valor) {
-                                setState(() {
-                                  _busqueda = valor;
-                                });
-                              },
-                              decoration: const InputDecoration(
-                                labelText: 'Trabajador',
-                                hintText: 'Buscar por nombre o correo...',
-                                prefixIcon: Icon(Icons.search),
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: 180,
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _estadoSeleccionado,
-                              decoration: const InputDecoration(
-                                labelText: 'Estado',
-                              ),
-                              items: _estados
-                                  .map(
-                                    (estado) => DropdownMenuItem<String>(
-                                      value: estado,
-                                      child: Text(estado),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (valor) {
-                                if (valor == null) {
-                                  return;
-                                }
-                                setState(() {
-                                  _estadoSeleccionado = valor;
-                                });
-                              },
-                            ),
-                          ),
-                          SizedBox(
-                            width: anchoFecha,
-                            child: const _CampoFiltroAdmin(
-                              icono: Icons.calendar_today_outlined,
-                              texto: 'Fecha inicio',
-                            ),
-                          ),
-                          SizedBox(
-                            width: anchoFecha,
-                            child: const _CampoFiltroAdmin(
-                              icono: Icons.event_outlined,
-                              texto: 'Fecha fin',
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Actualizar asistencias',
-                            onPressed: _recargarAsistencias,
-                            icon: const Icon(Icons.refresh),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 18),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Registros encontrados: ${asistencias.length}',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: ColoresPanel.azul,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      },
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final usarTablaCompacta = constraints.maxWidth < 1200;
+                      final escala =
+                          MediaQuery.textScalerOf(context).scale(14) / 14;
+                      final usarTablaCompacta =
+                          constraints.maxWidth < 1200 * escala;
 
-                      Widget contenidoTabla({required bool compacta}) {
+                      final continuas = asistencias
+                          .where((fila) => fila.esContinua)
+                          .toList();
+                      final partidas = asistencias
+                          .where((fila) => !fila.esContinua)
+                          .toList();
+
+                      Widget tablaDeJornadas(
+                        List<_AsistenciaAdminFila> filas, {
+                        required bool continua,
+                        required bool compacta,
+                      }) {
+                        final etiquetas = continua
+                            ? ['Entrada', 'Salida']
+                            : [
+                                'Entrada\nMañana',
+                                'Salida\nMañana',
+                                'Entrada\nTarde',
+                                'Salida\nTarde',
+                              ];
                         return Container(
                           decoration: BoxDecoration(
                             color: ColoresSistema.fondoSuave,
-                            borderRadius: BorderRadius.circular(
-                              MedidasSistema.radioBloque,
-                            ),
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: ColoresSistema.bordeIntermedio,
                             ),
@@ -389,159 +662,122 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 14,
+                                  horizontal: 12,
+                                  vertical: 10,
                                 ),
                                 decoration: const BoxDecoration(
-                                  color: Color(0xFFE9EFF3),
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: Radius.circular(
-                                      MedidasSistema.radioBloque,
-                                    ),
-                                    topRight: Radius.circular(
-                                      MedidasSistema.radioBloque,
-                                    ),
+                                  color: Color(0xFFF0F5F7),
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(12),
                                   ),
                                 ),
-                                child: compacta
-                                    ? const Row(
-                                        children: [
-                                          SizedBox(
-                                            width: 120,
-                                            child: _TituloColumna('Trabajador'),
-                                          ),
-                                          SizedBox(
-                                            width: 95,
-                                            child: _TituloColumna('Fecha'),
-                                          ),
-                                          SizedBox(
-                                            width: 85,
-                                            child: _TituloColumna(
-                                              'Entrada\nMaÃ±ana',
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            width: 85,
-                                            child: _TituloColumna(
-                                              'Salida\nMaÃ±ana',
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            width: 85,
-                                            child: _TituloColumna(
-                                              'Entrada\nTarde',
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            width: 85,
-                                            child: _TituloColumna(
-                                              'Salida\nTarde',
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            width: 75,
-                                            child: _TituloColumna('Tardanza'),
-                                          ),
-                                          SizedBox(
-                                            width: 85,
-                                            child: _TituloColumna(
-                                              'T. laborado',
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            width: 110,
-                                            child: _TituloColumna('Estado'),
-                                          ),
-                                          SizedBox(
-                                            width: 120,
-                                            child: _TituloColumna('Accion'),
-                                          ),
-                                        ],
-                                      )
-                                    : const Row(
-                                        children: [
-                                          Expanded(
-                                            flex: 2,
-                                            child: _TituloColumna('Trabajador'),
-                                          ),
-                                          Expanded(
-                                            flex: 2,
-                                            child: _TituloColumna('Fecha'),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: _TituloColumna(
-                                              'Entrada\nMaÃ±ana',
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: _TituloColumna(
-                                              'Salida\nMaÃ±ana',
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: _TituloColumna(
-                                              'Entrada\nTarde',
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: _TituloColumna(
-                                              'Salida\nTarde',
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: _TituloColumna('Tardanza'),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: _TituloColumna(
-                                              'T. laborado',
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 2,
-                                            child: _TituloColumna('Estado'),
-                                          ),
-                                          SizedBox(
-                                            width: 120,
-                                            child: _TituloColumna('Accion'),
-                                          ),
-                                        ],
-                                      ),
-                              ),
-                              if (asistencias.isEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.all(24),
-                                  child: Text(
-                                    todas.isEmpty
-                                        ? 'Aun no hay marcaciones registradas en Firestore.'
-                                        : 'No se encontraron marcaciones con los filtros actuales.',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          color: ColoresSistema.textoSecundario,
+                                child: Row(
+                                  children: [
+                                    if (widget.trabajadorId == null)
+                                      Expanded(
+                                        flex: compacta ? 120 : 2,
+                                        child: const _TituloColumna(
+                                          'Trabajador',
                                         ),
-                                  ),
-                                )
-                              else
-                                ...asistencias.map(
-                                  (item) => _FilaAsistenciaAdmin(
-                                    asistencia: item,
-                                    onVerDetalle: () => _mostrarDetalle(item),
-                                    compacta: compacta,
-                                  ),
+                                      ),
+                                    Expanded(
+                                      flex: compacta ? 95 : 2,
+                                      child: const _TituloColumna('Fecha'),
+                                    ),
+                                    for (final etiqueta in etiquetas)
+                                      Expanded(
+                                        flex: compacta ? 85 : 1,
+                                        child: _TituloColumna(etiqueta),
+                                      ),
+                                    Expanded(
+                                      flex: compacta ? 75 : 1,
+                                      child: const _TituloColumna('Tardanza'),
+                                    ),
+                                    Expanded(
+                                      flex: compacta ? 85 : 1,
+                                      child: const _TituloColumna(
+                                        'T. laborado',
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: compacta ? 110 : 2,
+                                      child: const _TituloColumna('Estado'),
+                                    ),
+                                    if (compacta)
+                                      const Expanded(
+                                        flex: 110,
+                                        child: _TituloColumna('Acción'),
+                                      )
+                                    else
+                                      const SizedBox(
+                                        width: 120,
+                                        child: _TituloColumna('Acción'),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              for (final fila in filas)
+                                _FilaAsistenciaAdmin(
+                                  asistencia: fila,
+                                  compacta: compacta,
+                                  mostrarTrabajador:
+                                      widget.trabajadorId == null,
+                                  onRegularizar: () =>
+                                      _mostrarDialogoRegularizacion(fila),
                                 ),
                             ],
                           ),
                         );
                       }
 
+                      Widget contenidoTabla({required bool compacta}) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (asistencias.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                todas.isEmpty
+                                    ? 'Aun no hay marcaciones registradas en Firestore.'
+                                    : 'No se encontraron marcaciones con los filtros actuales.',
+                              ),
+                            ),
+                          if (continuas.isNotEmpty) ...[
+                            tablaDeJornadas(
+                              continuas,
+                              continua: true,
+                              compacta: compacta,
+                            ),
+                          ],
+                          if (partidas.isNotEmpty) ...[
+                            if (continuas.isNotEmpty)
+                              const SizedBox(height: 20),
+                            tablaDeJornadas(
+                              partidas,
+                              continua: false,
+                              compacta: compacta,
+                            ),
+                          ],
+                          if (_errorCargarMas != null)
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                _errorCargarMas!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
                       if (usarTablaCompacta) {
+                        final minimo =
+                            ((partidas.isEmpty ? 820.0 : 1080.0) -
+                                (widget.trabajadorId == null ? 0 : 120)) *
+                            escala.clamp(1.0, 2.0);
+                        final anchoTabla = constraints.maxWidth < minimo
+                            ? minimo
+                            : constraints.maxWidth;
                         return Scrollbar(
                           controller: _tablaScrollController,
                           thumbVisibility: true,
@@ -550,7 +786,7 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                             controller: _tablaScrollController,
                             scrollDirection: Axis.horizontal,
                             child: SizedBox(
-                              width: 980,
+                              width: anchoTabla,
                               child: contenidoTabla(compacta: true),
                             ),
                           ),
@@ -563,6 +799,28 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
                       );
                     },
                   ),
+                  if (_hayMasAsistencias) ...[
+                    const SizedBox(height: 12),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: _cargandoMas ? null : _cargarSiguientePagina,
+                        icon: _cargandoMas
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.expand_more),
+                        label: Text(
+                          _cargandoMas
+                              ? 'Cargando...'
+                              : 'Cargar más asistencias',
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -573,116 +831,19 @@ class _ModuloAsistenciasAdminState extends State<ModuloAsistenciasAdmin> {
     );
   }
 
-  Future<void> _mostrarDetalle(_AsistenciaAdminFila asistencia) async {
-    final accion = await showDialog<_AccionDetalleAsistencia>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            'Detalle de marcacion',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _DatoDetalleAdmin(
-                  etiqueta: 'Area',
-                  valor: asistencia.area.isEmpty ? 'Sin area' : asistencia.area,
-                ),
-                _DatoDetalleAdmin(
-                  etiqueta: 'Cargo',
-                  valor: asistencia.cargo.isEmpty
-                      ? 'Sin cargo'
-                      : asistencia.cargo,
-                ),
-                _DatoDetalleAdmin(
-                  etiqueta: 'Correo',
-                  valor: asistencia.correo.isEmpty
-                      ? 'Sin correo'
-                      : asistencia.correo,
-                ),
-                _DatoDetalleAdmin(
-                  etiqueta: 'Ubic. E. manana',
-                  valor: asistencia.ubicacionEntradaManana,
-                ),
-                _DatoDetalleAdmin(
-                  etiqueta: 'Ubic. S. manana',
-                  valor: asistencia.ubicacionSalidaManana,
-                ),
-                _DatoDetalleAdmin(
-                  etiqueta: 'Ubic. E. tarde',
-                  valor: asistencia.ubicacionEntradaTarde,
-                ),
-                _DatoDetalleAdmin(
-                  etiqueta: 'Ubic. S. tarde',
-                  valor: asistencia.ubicacionSalidaTarde,
-                ),
-                _DatoDetalleAdmin(etiqueta: 'Rostro', valor: asistencia.rostro),
-                const SizedBox(height: 8),
-                Text(
-                  'Observacion',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: ColoresSistema.textoSecundario,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: ColoresSistema.fondoSuave,
-                    borderRadius: BorderRadius.circular(
-                      MedidasSistema.radioCampo,
-                    ),
-                    border: Border.all(color: ColoresSistema.bordeIntermedio),
-                  ),
-                  child: Text(
-                    asistencia.detalle,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            FilledButton.icon(
-              onPressed: () => Navigator.of(
-                context,
-              ).pop(_AccionDetalleAsistencia.regularizar),
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Regularizar'),
-            ),
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cerrar'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted || accion != _AccionDetalleAsistencia.regularizar) return;
-
-    await Future<void>.delayed(Duration.zero);
-    if (!mounted) return;
-    await _mostrarDialogoRegularizacion(asistencia);
-  }
-
   Future<void> _mostrarDialogoRegularizacion(
     _AsistenciaAdminFila asistencia,
   ) async {
+    if (widget.trabajadorId != null &&
+        asistencia.usuarioId != widget.trabajadorId!.trim()) {
+      return;
+    }
     final actualizado = await showDialog<bool>(
       context: context,
       builder: (_) => _DialogoRegularizacionAsistencia(
         asistencia: asistencia,
         repositorioAsistencias: _repositorioAsistencias,
+        sedesPorId: _sedesPorId,
       ),
     );
 
@@ -701,10 +862,12 @@ class _DialogoRegularizacionAsistencia extends StatefulWidget {
   const _DialogoRegularizacionAsistencia({
     required this.asistencia,
     required this.repositorioAsistencias,
+    required this.sedesPorId,
   });
 
   final _AsistenciaAdminFila asistencia;
   final RepositorioAsistenciasImpl repositorioAsistencias;
+  final Map<String, String> sedesPorId;
 
   @override
   State<_DialogoRegularizacionAsistencia> createState() =>
@@ -715,6 +878,8 @@ class _DialogoRegularizacionAsistenciaState
     extends State<_DialogoRegularizacionAsistencia> {
   RegularizacionJornada? _jornada;
   final _horas = <String, TextEditingController>{};
+  final _sedesNuevas = <String, String>{};
+  final _motivo = TextEditingController();
   bool _guardando = false;
   String? _error;
 
@@ -736,6 +901,7 @@ class _DialogoRegularizacionAsistenciaState
 
   @override
   void dispose() {
+    _motivo.dispose();
     for (final controller in _horas.values) {
       controller.dispose();
     }
@@ -747,7 +913,7 @@ class _DialogoRegularizacionAsistenciaState
     try {
       final cambios = _jornada!.preparar({
         for (final e in _horas.entries) e.key: e.value.text,
-      });
+      }, sedesNuevas: _sedesNuevas);
       setState(() {
         _guardando = true;
         _error = null;
@@ -755,6 +921,10 @@ class _DialogoRegularizacionAsistenciaState
       await widget.repositorioAsistencias.regularizarJornada(
         originales: widget.asistencia.originales,
         actualizadas: cambios,
+        motivo: _motivo.text,
+        administradorId:
+            FirebaseAuth.instance.currentUser?.uid ??
+            (throw StateError('No hay una sesión administrativa activa.')),
       );
       if (mounted) {
         Navigator.of(context).pop(true);
@@ -784,6 +954,7 @@ class _DialogoRegularizacionAsistenciaState
   @override
   Widget build(BuildContext context) {
     final jornada = _jornada;
+    final sedes = widget.asistencia.originales.map((m) => m.sedeId).toSet();
     return PopScope(
       canPop: !_guardando,
       child: AlertDialog(
@@ -795,11 +966,7 @@ class _DialogoRegularizacionAsistenciaState
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Corrige las horas de ${widget.asistencia.trabajador} del ${widget.asistencia.fecha}.',
-                ),
                 if (jornada != null) ...[
-                  const SizedBox(height: 12),
                   if (!jornada.horarioConfirmado)
                     const Text(
                       'Jornada antigua sin horario identificado: solo se pueden corregir marcas existentes, conservando sus datos.',
@@ -821,10 +988,45 @@ class _DialogoRegularizacionAsistenciaState
                         hintText: 'HH:mm',
                       ),
                     ),
+                    if (sedes.length > 1 && jornada.existente(campo) == null)
+                      DropdownButtonFormField<String>(
+                        initialValue: _sedesNuevas[jornada.clave(campo)],
+                        decoration: const InputDecoration(
+                          labelText: 'Sede de la nueva marcación',
+                        ),
+                        items: [
+                          for (final sede in sedes)
+                            DropdownMenuItem(
+                              value: sede,
+                              child: Text(widget.sedesPorId[sede] ?? sede),
+                            ),
+                        ],
+                        onChanged: _guardando
+                            ? null
+                            : (valor) {
+                                if (valor != null) {
+                                  setState(
+                                    () => _sedesNuevas[jornada.clave(campo)] =
+                                        valor,
+                                  );
+                                }
+                              },
+                      ),
                   ],
                   const SizedBox(height: 12),
                   const Text(
                     'Formato de 24 horas, por ejemplo 08:30 o 18:30. No borres horas existentes.',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _motivo,
+                    enabled: !_guardando,
+                    maxLength: 500,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Motivo de la corrección (obligatorio)',
+                    ),
                   ),
                 ],
                 if (_error != null) ...[
@@ -855,39 +1057,53 @@ class _DialogoRegularizacionAsistenciaState
   }
 }
 
-enum _AccionDetalleAsistencia { regularizar }
-
 class _CampoFiltroAdmin extends StatelessWidget {
-  const _CampoFiltroAdmin({required this.icono, required this.texto});
+  const _CampoFiltroAdmin({
+    required this.icono,
+    required this.texto,
+    required this.onTap,
+  });
 
   final IconData icono;
   final String texto;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: ColoresSistema.fondoTarjeta,
-        borderRadius: BorderRadius.circular(MedidasSistema.radioCampo),
-        border: Border.all(color: ColoresSistema.bordeCampo),
-      ),
-      child: Row(
-        children: [
-          Icon(icono, size: 18, color: ColoresSistema.iconoSuave),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              texto,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: ColoresSistema.textoSuave,
-              ),
-            ),
+    return Material(
+      color: ColoresSistema.fondoTarjeta,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.sizeOf(context).width < 600 ? 44 : 40,
           ),
-        ],
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: ColoresSistema.bordeCampo),
+          ),
+          child: Row(
+            children: [
+              Icon(icono, size: 18, color: ColoresSistema.iconoSuave),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  texto,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: ColoresSistema.textoSuave,
+                  ),
+                ),
+              ),
+              if (texto != 'Fecha inicio' && texto != 'Fecha fin')
+                const Icon(Icons.arrow_drop_down),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -906,7 +1122,7 @@ class _TituloColumna extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-        fontSize: 12,
+        fontSize: 13,
         color: ColoresSistema.iconoSuave,
         fontWeight: FontWeight.w800,
         height: 1.15,
@@ -918,20 +1134,22 @@ class _TituloColumna extends StatelessWidget {
 class _FilaAsistenciaAdmin extends StatelessWidget {
   const _FilaAsistenciaAdmin({
     required this.asistencia,
-    required this.onVerDetalle,
+    required this.onRegularizar,
     required this.compacta,
+    required this.mostrarTrabajador,
   });
 
   final _AsistenciaAdminFila asistencia;
-  final VoidCallback onVerDetalle;
+  final VoidCallback onRegularizar;
   final bool compacta;
+  final bool mostrarTrabajador;
 
   Color _colorEstado() {
     switch (asistencia.estado) {
       case 'Correcta':
-        return ColoresSistema.verdeExito;
+        return const Color(0xFF146C43);
       case 'Observada':
-        return const Color(0xFFB66A18);
+        return const Color(0xFF915012);
       case 'Pendiente':
         return ColoresSistema.rojoInstitucional;
       default:
@@ -944,75 +1162,66 @@ class _FilaAsistenciaAdmin extends StatelessWidget {
     final colorEstado = _colorEstado();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: ColoresSistema.divisor)),
       ),
-      child: compacta
-          ? Row(
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: _CeldaTrabajadorTabla(asistencia: asistencia),
-                ),
-                SizedBox(width: 95, child: _TextoTabla(asistencia.fecha)),
-                SizedBox(
-                  width: 85,
-                  child: _TextoTabla(asistencia.entradaManana),
-                ),
-                SizedBox(
-                  width: 85,
-                  child: _TextoTabla(asistencia.salidaManana),
-                ),
-                SizedBox(
-                  width: 85,
-                  child: _TextoTabla(asistencia.entradaTarde),
-                ),
-                SizedBox(width: 85, child: _TextoTabla(asistencia.salidaTarde)),
-                SizedBox(width: 75, child: _TextoTabla(asistencia.tardanza)),
-                SizedBox(
-                  width: 85,
-                  child: _TextoTabla(asistencia.tiempoLaboral),
-                ),
-                SizedBox(
-                  width: 110,
-                  child: _ChipEstadoTabla(
-                    estado: asistencia.estado,
-                    colorEstado: colorEstado,
-                  ),
-                ),
-                SizedBox(
-                  width: 120,
-                  child: _BotonAccionTabla(onVerDetalle: onVerDetalle),
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: _CeldaTrabajadorTabla(asistencia: asistencia),
-                ),
-                Expanded(flex: 2, child: _TextoTabla(asistencia.fecha)),
-                Expanded(flex: 1, child: _TextoTabla(asistencia.entradaManana)),
-                Expanded(flex: 1, child: _TextoTabla(asistencia.salidaManana)),
-                Expanded(flex: 1, child: _TextoTabla(asistencia.entradaTarde)),
-                Expanded(flex: 1, child: _TextoTabla(asistencia.salidaTarde)),
-                Expanded(flex: 1, child: _TextoTabla(asistencia.tardanza)),
-                Expanded(flex: 1, child: _TextoTabla(asistencia.tiempoLaboral)),
-                Expanded(
-                  flex: 2,
-                  child: _ChipEstadoTabla(
-                    estado: asistencia.estado,
-                    colorEstado: colorEstado,
-                  ),
-                ),
-                SizedBox(
-                  width: 120,
-                  child: _BotonAccionTabla(onVerDetalle: onVerDetalle),
-                ),
-              ],
+      child: Row(
+        children: [
+          if (mostrarTrabajador)
+            Expanded(
+              flex: compacta ? 120 : 2,
+              child: _CeldaTrabajadorTabla(asistencia: asistencia),
             ),
+          Expanded(
+            flex: compacta ? 95 : 2,
+            child: _TextoTabla(asistencia.fecha),
+          ),
+          Expanded(
+            flex: compacta ? 85 : 1,
+            child: _TextoTabla(asistencia.entradaManana),
+          ),
+          Expanded(
+            flex: compacta ? 85 : 1,
+            child: _TextoTabla(asistencia.salidaManana),
+          ),
+          if (!asistencia.esContinua) ...[
+            Expanded(
+              flex: compacta ? 85 : 1,
+              child: _TextoTabla(asistencia.entradaTarde),
+            ),
+            Expanded(
+              flex: compacta ? 85 : 1,
+              child: _TextoTabla(asistencia.salidaTarde),
+            ),
+          ],
+          Expanded(
+            flex: compacta ? 75 : 1,
+            child: _TextoTabla(asistencia.tardanza),
+          ),
+          Expanded(
+            flex: compacta ? 85 : 1,
+            child: _TextoTabla(asistencia.tiempoLaboral),
+          ),
+          Expanded(
+            flex: compacta ? 110 : 2,
+            child: _ChipEstadoTabla(
+              estado: asistencia.estado,
+              colorEstado: colorEstado,
+            ),
+          ),
+          if (compacta)
+            Expanded(
+              flex: 110,
+              child: _BotonAccionTabla(onRegularizar: onRegularizar),
+            )
+          else
+            SizedBox(
+              width: 120,
+              child: _BotonAccionTabla(onRegularizar: onRegularizar),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1024,21 +1233,24 @@ class _CeldaTrabajadorTabla extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          _formatearNombreTrabajador(asistencia.trabajador),
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: ColoresSistema.textoTitulo,
-            height: 1.25,
+    return Tooltip(
+      message: asistencia.trabajador,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            asistencia.trabajador,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: ColoresSistema.textoTitulo,
+              height: 1.25,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1073,18 +1285,18 @@ class _ChipEstadoTabla extends StatelessWidget {
 }
 
 class _BotonAccionTabla extends StatelessWidget {
-  const _BotonAccionTabla({required this.onVerDetalle});
+  const _BotonAccionTabla({required this.onRegularizar});
 
-  final VoidCallback onVerDetalle;
+  final VoidCallback onRegularizar;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.center,
       child: OutlinedButton.icon(
-        onPressed: onVerDetalle,
-        icon: const Icon(Icons.visibility_outlined, size: 16),
-        label: const Text('Ver'),
+        onPressed: onRegularizar,
+        icon: const Icon(Icons.edit_outlined, size: 16),
+        label: const Text('Regularizar'),
       ),
     );
   }
@@ -1110,43 +1322,6 @@ class _TextoTabla extends StatelessWidget {
   }
 }
 
-class _DatoDetalleAdmin extends StatelessWidget {
-  const _DatoDetalleAdmin({required this.etiqueta, required this.valor});
-
-  final String etiqueta;
-  final String valor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(
-              etiqueta,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: ColoresSistema.textoSecundario,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              valor,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: ColoresSistema.textoBase),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _GrupoAsistenciaAdmin {
   _GrupoAsistenciaAdmin({
     required this.fecha,
@@ -1155,7 +1330,7 @@ class _GrupoAsistenciaAdmin {
     required this.correo,
     required this.area,
     required this.cargo,
-    required this.sedeId,
+    required this.sedesPorId,
   });
 
   final String fecha;
@@ -1164,7 +1339,7 @@ class _GrupoAsistenciaAdmin {
   final String correo;
   final String area;
   final String cargo;
-  final String sedeId;
+  final Map<String, String> sedesPorId;
   final List<Asistencia> marcaciones = [];
 
   _AsistenciaAdminFila aFila() {
@@ -1175,19 +1350,8 @@ class _GrupoAsistenciaAdmin {
             marcaciones.first.fechaHora.month,
             marcaciones.first.fechaHora.day,
           );
-    final resumen = construirResumenJornadaTrabajador(marcaciones, fechaBase);
-    final validaciones = marcaciones;
-    final todasDentroZona = validaciones.every((item) => item.dentroDeZona);
-    final todasConRostro = validaciones.every((item) => item.rostroValidado);
-    final completa =
-        !resumen.esNoLaborable &&
-        resumen.tramos.every((tramo) => tramo.completo);
-    final observaciones = validaciones
-        .map((item) => item.observacion)
-        .whereType<String>()
-        .where((item) => item.trim().isNotEmpty)
-        .toList();
-    final tieneInconsistenciaSecuencia = resumen.mensajeBloqueoJornada != null;
+    final evaluacion = EvaluacionAsistenciaAdmin(marcaciones, fechaBase);
+    final resumen = evaluacion.resumen;
     final fechaOrden = marcaciones.isEmpty
         ? DateTime(1900)
         : marcaciones
@@ -1196,17 +1360,6 @@ class _GrupoAsistenciaAdmin {
                 (actual, siguiente) =>
                     actual.isAfter(siguiente) ? actual : siguiente,
               );
-
-    final estado = resumen.esNoLaborable
-        ? 'No laborable'
-        : !completa
-        ? 'Pendiente'
-        : (!todasDentroZona ||
-              !todasConRostro ||
-              observaciones.isNotEmpty ||
-              tieneInconsistenciaSecuencia)
-        ? 'Observada'
-        : 'Correcta';
 
     return _AsistenciaAdminFila(
       fecha: fecha,
@@ -1218,7 +1371,7 @@ class _GrupoAsistenciaAdmin {
       correo: correo,
       area: area,
       cargo: cargo,
-      sedeId: sedeId,
+      esContinua: resumen.esJornadaContinua,
       entradaManana: _formatearHoraMarcacion(resumen.manana.entradaMarcada),
       salidaManana: _formatearHoraMarcacion(resumen.manana.salidaMarcada),
       entradaTarde: _formatearHoraMarcacion(resumen.tarde.entradaMarcada),
@@ -1234,13 +1387,9 @@ class _GrupoAsistenciaAdmin {
       ubicacionSalidaManana: _estadoUbicacion(resumen.manana.salidaMarcada),
       ubicacionEntradaTarde: _estadoUbicacion(resumen.tarde.entradaMarcada),
       ubicacionSalidaTarde: _estadoUbicacion(resumen.tarde.salidaMarcada),
-      rostro: todasConRostro ? 'Validado' : 'Pendiente',
-      estado: estado,
-      detalle: _construirDetalle(
-        estado: estado,
-        observaciones: observaciones,
-        tieneInconsistenciaSecuencia: tieneInconsistenciaSecuencia,
-      ),
+      rostro: evaluacion.todasConRostro ? 'Validado' : 'Pendiente',
+      estado: evaluacion.estado,
+      detalle: evaluacion.detalle,
     );
   }
 
@@ -1248,37 +1397,8 @@ class _GrupoAsistenciaAdmin {
     if (marcacion == null) {
       return '--';
     }
-    return marcacion.dentroDeZona ? 'Valida' : 'Observada';
-  }
-
-  String _construirDetalle({
-    required String estado,
-    required List<String> observaciones,
-    required bool tieneInconsistenciaSecuencia,
-  }) {
-    final detalles = <String>[];
-
-    if (tieneInconsistenciaSecuencia) {
-      detalles.add(
-        'La jornada presenta una secuencia irregular entre los bloques de la manana y la tarde.',
-      );
-    }
-
-    detalles.addAll(observaciones);
-
-    if (detalles.isNotEmpty) {
-      return detalles.join(' | ');
-    }
-
-    switch (estado) {
-      case 'Correcta':
-        return 'La jornada completa registra los dos bloques con ubicacion y rostro validados.';
-      case 'Observada':
-        return 'La jornada completa presenta observaciones y requiere revision administrativa.';
-      case 'Pendiente':
-      default:
-        return 'La jornada aun no cuenta con las cuatro marcaciones esperadas del dia.';
-    }
+    final estado = marcacion.dentroDeZona ? 'Válida' : 'Observada';
+    return '$estado · Sede: ${sedesPorId[marcacion.sedeId] ?? marcacion.sedeId}';
   }
 }
 
@@ -1291,7 +1411,7 @@ class _AsistenciaAdminFila {
     required this.correo,
     required this.area,
     required this.cargo,
-    required this.sedeId,
+    required this.esContinua,
     required this.entradaManana,
     required this.salidaManana,
     required this.entradaTarde,
@@ -1319,7 +1439,7 @@ class _AsistenciaAdminFila {
   final String correo;
   final String area;
   final String cargo;
-  final String sedeId;
+  final bool esContinua;
   final String entradaManana;
   final String salidaManana;
   final String entradaTarde;
@@ -1350,39 +1470,6 @@ String _formatearHora(DateTime fecha) {
   final hora = fecha.hour.toString().padLeft(2, '0');
   final minuto = fecha.minute.toString().padLeft(2, '0');
   return '$hora:$minuto';
-}
-
-String _formatearNombreTrabajador(String nombre) {
-  final palabras = nombre
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((palabra) => palabra.isNotEmpty)
-      .toList();
-
-  if (palabras.isEmpty) {
-    return 'Trabajador';
-  }
-
-  final lineas = <String>[];
-  var lineaActual = '';
-
-  for (final palabra in palabras) {
-    final propuesta = lineaActual.isEmpty ? palabra : '$lineaActual $palabra';
-    if (propuesta.length <= 14) {
-      lineaActual = propuesta;
-    } else {
-      if (lineaActual.isNotEmpty) {
-        lineas.add(lineaActual);
-      }
-      lineaActual = palabra;
-    }
-  }
-
-  if (lineaActual.isNotEmpty) {
-    lineas.add(lineaActual);
-  }
-
-  return lineas.take(3).join('\n');
 }
 
 String _formatearDuracion(Duration duracion) {

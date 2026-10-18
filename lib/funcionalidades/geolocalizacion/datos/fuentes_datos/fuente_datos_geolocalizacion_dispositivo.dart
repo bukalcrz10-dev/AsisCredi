@@ -19,7 +19,8 @@ class FuenteDatosGeolocalizacionDispositivo {
         longitudActual: null,
         distanciaMetros: null,
         dentroDeZona: false,
-        mensajeEstado: 'Activa el GPS del dispositivo para validar la asistencia.',
+        mensajeEstado:
+            'Activa el GPS del dispositivo para validar la asistencia.',
       );
     }
 
@@ -28,7 +29,8 @@ class FuenteDatosGeolocalizacionDispositivo {
       permiso = await Geolocator.requestPermission();
     }
 
-    final permisoConcedido = permiso == LocationPermission.always ||
+    final permisoConcedido =
+        permiso == LocationPermission.always ||
         permiso == LocationPermission.whileInUse;
 
     if (!permisoConcedido) {
@@ -47,8 +49,24 @@ class FuenteDatosGeolocalizacionDispositivo {
     final posicion = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 20),
       ),
     );
+
+    final antiguedad = DateTime.now().difference(posicion.timestamp);
+    if (antiguedad > const Duration(seconds: 30) ||
+        antiguedad < const Duration(seconds: -5)) {
+      return const ResultadoValidacionUbicacion(
+        servicioHabilitado: true,
+        permisoConcedido: true,
+        latitudActual: null,
+        longitudActual: null,
+        distanciaMetros: null,
+        dentroDeZona: false,
+        mensajeEstado:
+            'No se obtuvo una ubicación reciente. Vuelve a intentar con el GPS activado.',
+      );
+    }
 
     final distanciaMetros = Geolocator.distanceBetween(
       posicion.latitude,

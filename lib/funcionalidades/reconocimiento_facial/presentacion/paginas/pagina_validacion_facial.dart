@@ -114,9 +114,7 @@ class _PaginaValidacionFacialState extends State<PaginaValidacionFacial> {
     final controlador = _cameraController;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Validacion facial'),
-      ),
+      appBar: AppBar(title: const Text('Validacion facial')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -134,19 +132,17 @@ class _PaginaValidacionFacialState extends State<PaginaValidacionFacial> {
                   child: ColoredBox(
                     color: Colors.black,
                     child: _inicializandoCamara
-                        ? const Center(
-                            child: CircularProgressIndicator(),
-                          )
+                        ? const Center(child: CircularProgressIndicator())
                         : controlador != null && controlador.value.isInitialized
-                            ? CameraPreview(controlador)
-                            : Center(
-                                child: Text(
-                                  _mensajeError ??
-                                      'No fue posible inicializar la vista de camara.',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              ),
+                        ? CameraPreview(controlador)
+                        : Center(
+                            child: Text(
+                              _mensajeError ??
+                                  'No fue posible inicializar la vista de camara.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -154,9 +150,7 @@ class _PaginaValidacionFacialState extends State<PaginaValidacionFacial> {
               if (_mensajeError != null) ...[
                 Text(
                   _mensajeError!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
                 const SizedBox(height: 12),
               ],
@@ -177,7 +171,9 @@ class _PaginaValidacionFacialState extends State<PaginaValidacionFacial> {
               ),
               const SizedBox(height: 12),
               OutlinedButton(
-                onPressed: _capturando ? null : () => Navigator.of(context).pop(),
+                onPressed: _capturando
+                    ? null
+                    : () => Navigator.of(context).pop(),
                 child: const Text('Cancelar'),
               ),
             ],

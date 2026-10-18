@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../dominio/entidades/motivo_regularizacion.dart';
+
 import '../../dominio/entidades/asistencia.dart';
 import '../../dominio/repositorios/repositorio_asistencias.dart';
 import '../fuentes_datos/fuente_datos_asistencias_firestore.dart';
@@ -95,10 +98,43 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
     return asistencias;
   }
 
+  Future<PaginaAsistencias> obtenerPaginaAsistencias({
+    int limite = 50,
+    DateTime? desde,
+    DateTime? hastaExclusiva,
+    QueryDocumentSnapshot<Map<String, dynamic>>? despuesDe,
+  }) async {
+    final pagina = await _fuenteDatos.obtenerPaginaAsistencias(
+      limite: limite,
+      completarUltimoDia: true,
+      desde: desde,
+      hastaExclusiva: hastaExclusiva,
+      despuesDe: despuesDe,
+    );
+    return PaginaAsistencias(
+      asistencias: pagina.documentos
+          .map(
+            (documento) => ModeloAsistencia.desdeMapa(
+              documento.data(),
+              documento.id,
+            ).aEntidad(),
+          )
+          .toList(),
+      ultimoDocumento: pagina.ultimoDocumento,
+      hayMas: pagina.hayMas,
+    );
+  }
+
   Future<void> regularizarJornada({
     required List<Asistencia> originales,
     required List<Asistencia> actualizadas,
+    required String administradorId,
+    required String motivo,
   }) async {
+    final motivoValidado = validarMotivoRegularizacion(motivo);
+    if (administradorId.trim().isEmpty) {
+      throw StateError('No hay una sesión administrativa activa.');
+    }
     if (actualizadas.isEmpty) return;
     final esperados = {
       for (final a in originales)
@@ -107,14 +143,14 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
     final cambios = <String, Map<String, dynamic>>{};
     for (final a in actualizadas) {
       final id = a.id.isEmpty ? idMarcacionPorBloque(a) : a.id;
+      final datos = ModeloAsistencia.desdeEntidad(a).aMapa();
+      final observacion = [
+        if (a.observacion?.trim().isNotEmpty == true) a.observacion!.trim(),
+        'Motivo: $motivoValidado',
+      ].join(' | ');
       cambios[id] = a.id.isEmpty
-          ? ModeloAsistencia.desdeEntidad(a).aMapa()
-          : {
-              'fechaHora': ModeloAsistencia.desdeEntidad(
-                a,
-              ).aMapa()['fechaHora'],
-              'observacion': a.observacion,
-            };
+          ? {...datos, 'observacion': observacion}
+          : {'fechaHora': datos['fechaHora'], 'observacion': observacion};
     }
     await _fuenteDatos.regularizarJornada(
       esperados: esperados,
@@ -126,6 +162,18 @@ class RepositorioAsistenciasImpl implements RepositorioAsistencias {
   Future<void> eliminarAsistencia(String id) {
     return _fuenteDatos.eliminarAsistencia(id);
   }
+}
+
+class PaginaAsistencias {
+  const PaginaAsistencias({
+    required this.asistencias,
+    required this.ultimoDocumento,
+    required this.hayMas,
+  });
+
+  final List<Asistencia> asistencias;
+  final QueryDocumentSnapshot<Map<String, dynamic>>? ultimoDocumento;
+  final bool hayMas;
 }
 
 // Los clientes actualizados escriben el mismo documento para el mismo evento.

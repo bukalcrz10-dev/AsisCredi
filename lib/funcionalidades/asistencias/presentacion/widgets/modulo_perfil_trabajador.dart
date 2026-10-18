@@ -9,11 +9,13 @@ class ModuloPerfilTrabajador extends StatelessWidget {
     required this.controlador,
     required this.correoSesion,
     required this.onCerrarSesion,
+    this.onRostroCelular,
   });
 
   final ControladorAsistencia controlador;
   final String? correoSesion;
   final Future<void> Function()? onCerrarSesion;
+  final Future<void> Function()? onRostroCelular;
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +23,12 @@ class ModuloPerfilTrabajador extends StatelessWidget {
     final nombreCompleto = perfil?.nombreCompleto ?? 'Trabajador';
     final rol = perfil?.rolOCargo ?? 'Personal institucional';
     final cargo = perfil?.cargo.isNotEmpty == true ? perfil!.cargo : rol;
-    final area = perfil?.area.isNotEmpty == true ? perfil!.area : 'No registrada';
-    final telefono =
-        perfil?.telefono.isNotEmpty == true ? perfil!.telefono : 'No registrado';
+    final area = perfil?.area.isNotEmpty == true
+        ? perfil!.area
+        : 'No registrada';
+    final telefono = perfil?.telefono.isNotEmpty == true
+        ? perfil!.telefono
+        : 'No registrado';
     final sede = perfil?.nombreSede ?? 'Pendiente';
     final correoPerfil = perfil?.correoNotificacion;
     final correo = (correoPerfil != null && correoPerfil.isNotEmpty)
@@ -126,27 +131,28 @@ class ModuloPerfilTrabajador extends StatelessWidget {
                       nombreCompleto,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: ColoresSistema.textoTitulo,
-                          ),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: ColoresSistema.textoTitulo,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       rol,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontSize: 13,
-                            color: ColoresSistema.textoSecundario,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontSize: 13,
+                        color: ColoresSistema.textoSecundario,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 18),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         'Informacion institucional',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               fontWeight: FontWeight.w800,
                               color: ColoresSistema.textoFuerte,
                             ),
@@ -158,9 +164,9 @@ class ModuloPerfilTrabajador extends StatelessWidget {
                       child: Text(
                         'Datos principales de tu cuenta de trabajador.',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontSize: 11,
-                              color: ColoresSistema.textoSuave,
-                            ),
+                          fontSize: 11,
+                          color: ColoresSistema.textoSuave,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -206,6 +212,14 @@ class ModuloPerfilTrabajador extends StatelessWidget {
             ],
           ),
         ),
+        if (onRostroCelular != null) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onRostroCelular,
+            icon: const Icon(Icons.face),
+            label: const Text('Rostro y celular'),
+          ),
+        ],
         if (onCerrarSesion != null) ...[
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -245,11 +259,7 @@ class _FilaPerfilSimple extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icono,
-            size: 18,
-            color: colorIcono ?? ColoresSistema.textoSuave,
-          ),
+          Icon(icono, size: 18, color: colorIcono ?? ColoresSistema.textoSuave),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -258,19 +268,19 @@ class _FilaPerfilSimple extends StatelessWidget {
                 Text(
                   titulo,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontSize: 11,
-                        letterSpacing: 0.5,
-                        color: ColoresSistema.textoSuave,
-                      ),
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                    color: ColoresSistema.textoSuave,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   valor,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: ColoresSistema.textoFuerte,
-                      ),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: ColoresSistema.textoFuerte,
+                  ),
                 ),
               ],
             ),

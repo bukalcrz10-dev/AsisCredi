@@ -10,10 +10,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 
 import 'package:asistencia_app/app/tema.dart';
-import 'package:asistencia_app/funcionalidades/alertas/dominio/casos_de_uso/obtener_alertas_por_usuario.dart';
-import 'package:asistencia_app/funcionalidades/alertas/dominio/casos_de_uso/registrar_alerta.dart';
-import 'package:asistencia_app/funcionalidades/alertas/dominio/entidades/alerta.dart';
-import 'package:asistencia_app/funcionalidades/alertas/dominio/repositorios/repositorio_alertas.dart';
 import 'package:asistencia_app/funcionalidades/asistencias/dominio/casos_de_uso/obtener_asistencias_por_usuario.dart';
 import 'package:asistencia_app/funcionalidades/asistencias/dominio/casos_de_uso/obtener_perfil_trabajador_actual.dart';
 import 'package:asistencia_app/funcionalidades/asistencias/dominio/casos_de_uso/registrar_asistencia.dart';
@@ -36,52 +32,76 @@ import 'package:asistencia_app/funcionalidades/usuarios/dominio/entidades/usuari
 import 'package:asistencia_app/funcionalidades/usuarios/dominio/repositorios/repositorio_usuarios.dart';
 
 void main() {
-
-  testWidgets('no muestra sede pendiente ni errores de cargo durante la carga inicial', (tester) async {
-    final usuarios = _UsuariosDemorados();
-    final controlador = ControladorAsistencia(
-      obtenerAlertasPorUsuario: ObtenerAlertasPorUsuario(_RepositorioAlertasFake()),
-      registrarAlerta: RegistrarAlerta(_RepositorioAlertasFake()),
-      registrarAsistencia: RegistrarAsistencia(_RepositorioAsistenciasFake()),
-      obtenerAsistenciasPorUsuario: ObtenerAsistenciasPorUsuario(_RepositorioAsistenciasFake()),
-      obtenerPerfilTrabajadorActual: ObtenerPerfilTrabajadorActual(
-        obtenerUsuarioPorId: ObtenerUsuarioPorId(usuarios),
-        obtenerSedePorId: ObtenerSedePorId(_SedeLista()),
-      ),
-      validarRostroCapturado: ValidarRostroCapturado(_RepositorioReconocimientoFacialFake()),
-      validarUbicacionActual: ValidarUbicacionActual(_RepositorioGeolocalizacionFake()),
-      usuarioIdAutenticado: 'u1',
-    );
-    await tester.pumpWidget(MaterialApp(home: PaginaInicio(
-      crearDependencias: () => DependenciasAsistencia(controlador: controlador,
-        repositorioReconocimientoFacial: _DetectorSinCamara()),
-    )));
-    expect(find.text('Cargando tu información de asistencia…'), findsOneWidget);
-    expect(find.text('Sede pendiente'), findsNothing);
-    expect(find.textContaining('Tu cargo no tiene horario'), findsNothing);
-    expect(find.text('Progreso del dia'), findsNothing);
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Sede pendiente'), findsNothing);
-    usuarios.respuesta.complete(const Usuario(id: 'u1', nombreCompleto: 'Trabajador prueba',
-      correo: 'prueba@example.com', rol: RolUsuario.trabajador, cargo: 'Plataforma', sedeAsignadaId: 's1'));
-    await tester.pump();
-    await tester.pump();
-    expect(find.text('Cargando tu información de asistencia…'), findsNothing);
-    expect(find.text('Trabajador prueba'), findsOneWidget);
-    expect(find.text('Sede prueba'), findsOneWidget);
-    expect(find.textContaining('Tu cargo no tiene horario'), findsNothing);
-    usuarios.fallar = true;
-    await controlador.cargarPerfil();
-    await tester.pump();
-    expect(find.text('Reintentar'), findsOneWidget);
-    expect(find.text('Sede pendiente'), findsNothing);
-    expect(find.textContaining('Tu cargo no tiene horario'), findsNothing);
-    usuarios.fallar = false;
-    await tester.tap(find.text('Reintentar'));
-    await tester.pump(); await tester.pump();
-    expect(find.text('Trabajador prueba'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
-  });
+  testWidgets(
+    'no muestra sede pendiente ni errores de cargo durante la carga inicial',
+    (tester) async {
+      final usuarios = _UsuariosDemorados();
+      final controlador = ControladorAsistencia(
+        registrarAsistencia: RegistrarAsistencia(_RepositorioAsistenciasFake()),
+        obtenerAsistenciasPorUsuario: ObtenerAsistenciasPorUsuario(
+          _RepositorioAsistenciasFake(),
+        ),
+        obtenerPerfilTrabajadorActual: ObtenerPerfilTrabajadorActual(
+          obtenerUsuarioPorId: ObtenerUsuarioPorId(usuarios),
+          obtenerSedePorId: ObtenerSedePorId(_SedeLista()),
+        ),
+        validarRostroCapturado: ValidarRostroCapturado(
+          _RepositorioReconocimientoFacialFake(),
+        ),
+        validarUbicacionActual: ValidarUbicacionActual(
+          _RepositorioGeolocalizacionFake(),
+        ),
+        usuarioIdAutenticado: 'u1',
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PaginaInicio(
+            crearDependencias: () => DependenciasAsistencia(
+              controlador: controlador,
+              repositorioReconocimientoFacial: _DetectorSinCamara(),
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.text('Cargando tu información de asistencia…'),
+        findsOneWidget,
+      );
+      expect(find.text('Sede pendiente'), findsNothing);
+      expect(find.textContaining('Tu cargo no tiene horario'), findsNothing);
+      expect(find.text('Progreso del dia'), findsNothing);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Sede pendiente'), findsNothing);
+      usuarios.respuesta.complete(
+        const Usuario(
+          id: 'u1',
+          nombreCompleto: 'Trabajador prueba',
+          correo: 'prueba@example.com',
+          rol: RolUsuario.trabajador,
+          cargo: 'Plataforma',
+          sedeAsignadaId: 's1',
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Cargando tu información de asistencia…'), findsNothing);
+      expect(find.text('Trabajador prueba'), findsOneWidget);
+      expect(find.text('Sede prueba'), findsOneWidget);
+      expect(find.textContaining('Tu cargo no tiene horario'), findsNothing);
+      usuarios.fallar = true;
+      await controlador.cargarPerfil();
+      await tester.pump();
+      expect(find.text('Reintentar'), findsOneWidget);
+      expect(find.text('Sede pendiente'), findsNothing);
+      expect(find.textContaining('Tu cargo no tiene horario'), findsNothing);
+      usuarios.fallar = false;
+      await tester.tap(find.text('Reintentar'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Trabajador prueba'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   // Esta prueba evita depender de Firebase durante el entorno de test
   // y valida la composicion basica de la pantalla de acceso.
@@ -91,86 +111,86 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: temaAplicacion(),
-        home: PaginaInicioSesion(crearControlador: () => ControladorInicioSesion(iniciarSesion: IniciarSesion(_AuthFake()))),
-      ),
-    );
-    await tester.pump();
-
-    expect(find.text('Iniciar sesion'), findsOneWidget);
-    expect(find.text('CREDIASCIENDE'), findsOneWidget);
-    expect(find.text('INGRESAR AL SISTEMA'), findsOneWidget);
-    expect(find.text('Mantener mi sesión iniciada'), findsOneWidget);
-    expect(tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value, isFalse);
-    await tester.ensureVisible(find.byType(CheckboxListTile));
-    await tester.tap(find.byType(CheckboxListTile));
-    await tester.pump();
-    expect(tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value, isTrue);
-  });
-
-  testWidgets('el historial permite abrir selector de fecha en inicio/fin y buscar', (
-    WidgetTester tester,
-  ) async {
-    var inicioSolicitada = 0;
-    var finSolicitada = 0;
-    var busquedaEjecutada = 0;
-
-    final controlador = ControladorAsistencia(
-      obtenerAlertasPorUsuario: ObtenerAlertasPorUsuario(
-        _RepositorioAlertasFake(),
-      ),
-      registrarAlerta: RegistrarAlerta(_RepositorioAlertasFake()),
-      registrarAsistencia: RegistrarAsistencia(_RepositorioAsistenciasFake()),
-      obtenerAsistenciasPorUsuario:
-          ObtenerAsistenciasPorUsuario(_RepositorioAsistenciasFake()),
-      obtenerPerfilTrabajadorActual: ObtenerPerfilTrabajadorActual(
-        obtenerUsuarioPorId: ObtenerUsuarioPorId(_RepositorioUsuariosFake()),
-        obtenerSedePorId: ObtenerSedePorId(_RepositorioSedesFake()),
-      ),
-      validarRostroCapturado: ValidarRostroCapturado(
-        _RepositorioReconocimientoFacialFake(),
-      ),
-      validarUbicacionActual: ValidarUbicacionActual(
-        _RepositorioGeolocalizacionFake(),
-      ),
-      usuarioIdAutenticado: 'u1',
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: temaAplicacion(),
-        home: ModuloHistorialTrabajador(
-          controlador: controlador,
-          onSeleccionarFechaInicio: () async {
-            inicioSolicitada++;
-          },
-          onSeleccionarFechaFin: () async {
-            finSolicitada++;
-          },
-          onBuscarRango: () async {
-            busquedaEjecutada++;
-          },
+        home: PaginaInicioSesion(
+          crearControlador: () => ControladorInicioSesion(
+            iniciarSesion: IniciarSesion(_AuthFake()),
+          ),
         ),
       ),
     );
+    await tester.pump();
 
-    await tester.tap(find.text('Inicio'));
-    await tester.tap(find.text('Fin'));
-    await tester.tap(find.byIcon(Icons.search));
-
-    expect(inicioSolicitada, 1);
-    expect(finSolicitada, 1);
-    expect(busquedaEjecutada, 1);
-    await tester.pumpWidget(const SizedBox.shrink());
-    controlador.dispose();
+    expect(find.text('Iniciar sesión'), findsOneWidget);
+    expect(find.text('CREDIASCIENDE'), findsOneWidget);
+    expect(find.text('INGRESAR AL SISTEMA'), findsOneWidget);
+    expect(find.text('Mantener mi sesión iniciada'), findsOneWidget);
+    expect(
+      tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+      isFalse,
+    );
+    await tester.ensureVisible(find.byType(CheckboxListTile));
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pump();
+    expect(
+      tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+      isTrue,
+    );
   });
-}
 
-class _RepositorioAlertasFake implements RepositorioAlertas {
-  @override
-  Future<String> registrarAlerta(Alerta alerta) async => 'id';
+  testWidgets(
+    'el historial permite abrir selector de fecha en inicio/fin y buscar',
+    (WidgetTester tester) async {
+      var inicioSolicitada = 0;
+      var finSolicitada = 0;
+      var busquedaEjecutada = 0;
 
-  @override
-  Future<List<Alerta>> obtenerAlertasPorUsuario(String usuarioId) async => const [];
+      final controlador = ControladorAsistencia(
+        registrarAsistencia: RegistrarAsistencia(_RepositorioAsistenciasFake()),
+        obtenerAsistenciasPorUsuario: ObtenerAsistenciasPorUsuario(
+          _RepositorioAsistenciasFake(),
+        ),
+        obtenerPerfilTrabajadorActual: ObtenerPerfilTrabajadorActual(
+          obtenerUsuarioPorId: ObtenerUsuarioPorId(_RepositorioUsuariosFake()),
+          obtenerSedePorId: ObtenerSedePorId(_RepositorioSedesFake()),
+        ),
+        validarRostroCapturado: ValidarRostroCapturado(
+          _RepositorioReconocimientoFacialFake(),
+        ),
+        validarUbicacionActual: ValidarUbicacionActual(
+          _RepositorioGeolocalizacionFake(),
+        ),
+        usuarioIdAutenticado: 'u1',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: temaAplicacion(),
+          home: ModuloHistorialTrabajador(
+            controlador: controlador,
+            onSeleccionarFechaInicio: () async {
+              inicioSolicitada++;
+            },
+            onSeleccionarFechaFin: () async {
+              finSolicitada++;
+            },
+            onBuscarRango: () async {
+              busquedaEjecutada++;
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Inicio'));
+      await tester.tap(find.text('Fin'));
+      await tester.tap(find.byIcon(Icons.search));
+
+      expect(inicioSolicitada, 1);
+      expect(finSolicitada, 1);
+      expect(busquedaEjecutada, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      controlador.dispose();
+    },
+  );
 }
 
 class _RepositorioAsistenciasFake implements RepositorioAsistencias {
@@ -178,7 +198,9 @@ class _RepositorioAsistenciasFake implements RepositorioAsistencias {
   Future<String> registrarAsistencia(Asistencia asistencia) async => 'id';
 
   @override
-  Future<List<Asistencia>> obtenerAsistenciasPorUsuario(String usuarioId) async => const [];
+  Future<List<Asistencia>> obtenerAsistenciasPorUsuario(
+    String usuarioId,
+  ) async => const [];
 
   @override
   Future<List<Asistencia>> obtenerAsistencias() async => const [];
@@ -206,7 +228,8 @@ class _RepositorioSedesFake implements RepositorioSedes {
   Future<void> guardarSede(Sede sede) async {}
 }
 
-class _RepositorioReconocimientoFacialFake implements RepositorioReconocimientoFacial {
+class _RepositorioReconocimientoFacialFake
+    implements RepositorioReconocimientoFacial {
   @override
   Future<ResultadoValidacionFacial> validarRostroEnImagen({
     required String rutaImagen,
@@ -237,12 +260,20 @@ class _UsuariosDemorados extends _RepositorioUsuariosFake {
     return respuesta.future;
   }
 }
+
 class _SedeLista extends _RepositorioSedesFake {
   @override
-  Future<Sede?> obtenerSedePorId(String id) async => const Sede(id: 's1', nombre: 'Sede prueba',
-    latitud: -12, longitud: -75, radioPermitidoMetros: 100);
+  Future<Sede?> obtenerSedePorId(String id) async => const Sede(
+    id: 's1',
+    nombre: 'Sede prueba',
+    latitud: -12,
+    longitud: -75,
+    radioPermitidoMetros: 100,
+  );
 }
-class _DetectorSinCamara extends Fake implements RepositorioReconocimientoFacialImpl {
+
+class _DetectorSinCamara extends Fake
+    implements RepositorioReconocimientoFacialImpl {
   @override
   Future<void> cerrar() async {}
 }

@@ -15,14 +15,13 @@ class ResumenDiaHistorial {
 
   Asistencia? get salidaTarde => _resumenJornada.tarde.salidaMarcada;
 
-  bool get esAsesor => tipoHorario == TipoHorarioPersonal.asesor;
   bool get esJornadaContinua => _resumenJornada.esJornadaContinua;
   bool get esNoLaborable => _resumenJornada.esNoLaborable;
   Asistencia? get salidaReceso => esJornadaContinua ? null : salidaManana;
   Asistencia? get salidaFinal => esJornadaContinua ? salidaManana : salidaTarde;
   String get etiquetaHorario => switch (tipoHorario) {
     TipoHorarioPersonal.asesor => 'Asesor',
-    TipoHorarioPersonal.plataforma => 'Plataforma',
+    TipoHorarioPersonal.plataforma => 'Auxiliar de operaciones',
     TipoHorarioPersonal.historico => 'Anterior',
   };
 
@@ -58,13 +57,6 @@ class ResumenDiaHistorial {
     final tardanzaTotal = tardanza;
     return (tardanzaTotal != null && tardanzaTotal > Duration.zero) ||
         salidaAnticipada > Duration.zero;
-  }
-
-  String get estadoTexto {
-    if (esNoLaborable) return 'No laborable';
-    if (completo && !observado) return 'Completo';
-    if (observado) return 'Observado';
-    return 'Pendiente';
   }
 
   ResumenJornadaTrabajador get _resumenJornada =>

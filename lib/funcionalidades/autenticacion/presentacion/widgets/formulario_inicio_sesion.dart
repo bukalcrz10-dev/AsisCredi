@@ -42,7 +42,7 @@ class FormularioInicioSesion extends StatelessWidget {
                   children: [
                     const TextSpan(text: 'Iniciar '),
                     const TextSpan(
-                      text: 'sesion',
+                      text: 'sesión',
                       style: TextStyle(
                         color: ColoresSistema.rojoInstitucionalMedio,
                         decoration: TextDecoration.underline,
@@ -83,7 +83,7 @@ class FormularioInicioSesion extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              'Contrasena',
+              'Contraseña',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 10),
@@ -91,7 +91,7 @@ class FormularioInicioSesion extends StatelessWidget {
               controller: contrasenaController,
               obscureText: !mostrarContrasena,
               decoration: InputDecoration(
-                hintText: 'Ingresa tu contrasena',
+                hintText: 'Ingresa tu contraseña',
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   onPressed: onAlternarContrasena,

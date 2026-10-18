@@ -8,9 +8,7 @@ class ValidarRostroCapturado {
 
   final RepositorioReconocimientoFacial _repositorioReconocimientoFacial;
 
-  Future<ResultadoValidacionFacial> ejecutar({
-    required String rutaImagen,
-  }) {
+  Future<ResultadoValidacionFacial> ejecutar({required String rutaImagen}) {
     return _repositorioReconocimientoFacial.validarRostroEnImagen(
       rutaImagen: rutaImagen,
     );
